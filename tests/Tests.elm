@@ -11,7 +11,10 @@ all =
     describe "A Test Suite"
         [ test "App.model.message should be set properly" <|
             \() ->
-                Expect.equal (Tuple.first App.init |> .message) "Your Elm App is working!"
+                Expect.equal (Tuple.first (App.init "a") |> .message) "Base Elm App"
+        , test "App.model.path should be set properly" <|
+            \() ->
+                Expect.equal (Tuple.first (App.init "logo-path") |> .logo) "logo-path"
         , test "Addition" <|
             \() ->
                 Expect.equal (3 + 7) 10
