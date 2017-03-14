@@ -1,12 +1,12 @@
 module Main exposing (..)
 
+import Navigation exposing (Location)
+
 import App
-import Html
 
-
-main : Program String App.Model App.Msg
+main : Program Never App.Model App.Msg
 main =
-    Html.programWithFlags
+    Navigation.program App.UrlChange
         { view = App.view
         , init = App.init
         , update = App.update

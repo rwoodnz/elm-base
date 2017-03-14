@@ -1,12 +1,6 @@
-body {
-  font-family: 'Source Sans Pro', 'Trebuchet MS', 'Lucida Grande', 'Bitstream Vera Sans', 'Helvetica Neue', sans-serif;
-  font-size: 30px;
-  margin: 0;
-  text-align: center;
-  color: #293c4b;
-}
-
-img {
-  margin: 20px 0;
-  max-width: 100px;
-}
+/* 
+For additional CSS beyond bootstrap. 
+As boostrap is loaded from a CDN in Index.Html, 
+this will be applied prior to bootstrap.
+Could change that by loading bootstrap through webpack.
+*/
