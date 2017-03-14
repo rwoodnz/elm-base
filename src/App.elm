@@ -11,6 +11,7 @@ import Navigation exposing (Location)
 type alias Model =
     { page : Page
     , navState : Navbar.State
+    , staticAssetsPath : String
     }
 
 
@@ -20,8 +21,13 @@ type Page
     | NotFound
 
 
-init : Location -> ( Model, Cmd Msg )
-init location =
+type alias Flags =
+    { staticAssetsPath : String
+    }
+
+
+init : Flags -> Location -> ( Model, Cmd Msg )
+init flags location =
     let
         ( navState, navCmd ) =
             Navbar.initialState NavMsg
@@ -30,6 +36,7 @@ init location =
             urlUpdate location
                 { navState = navState
                 , page = Home
+                , staticAssetsPath = flags.staticAssetsPath
                 }
     in
         ( model
@@ -90,7 +97,7 @@ menu model =
     Navbar.config NavMsg
         |> Navbar.withAnimation
         |> Navbar.container
-        |> Navbar.brand [ href "#" ] [ text "Home" ]
+        |> Navbar.brand [ href "#" ] [ text "Home"]
         |> Navbar.items
             [ Navbar.itemLink [ href "#about" ] [ text "About" ]
             ]
@@ -114,6 +121,7 @@ content model =
 pageHome : Model -> List (Html Msg)
 pageHome model =
     [ h1 [] [ text "Home" ]
+    , img [ src (model.staticAssetsPath ++ "Richard.jpeg") ] [] 
     ]
 
 
