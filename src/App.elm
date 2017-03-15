@@ -15,15 +15,16 @@ type alias Model =
     }
 
 
+type alias Flags =
+    { staticAssetsPath : String
+    }
+
+
 type Page
     = Home
     | About
     | NotFound
 
-
-type alias Flags =
-    { staticAssetsPath : String
-    }
 
 
 init : Flags -> Location -> ( Model, Cmd Msg )

@@ -2,24 +2,58 @@ module Tests exposing (..)
 
 import Test exposing (..)
 import Expect
-import String
--- import App
+import App
+import Html exposing (..)
+import Bootstrap.Navbar as Navbar
 
 
 all : Test
 all =
-    describe "A Test Suite"
-        [ 
-        -- test "App.model.message should be set properly" <|
-        --     \() ->
-        --         Expect.equal (Tuple.first (App.init "") |> .message) "Base Elm App"
-        -- , test "App.model.path should be set properly" <|
-        --     \() ->
-        --         Expect.equal (Tuple.first (App.init "logo-path") |> .logo) "logo-path"
-        test "Addition" <|
-            \() ->
-                Expect.equal (3 + 7) 10
-        , test "String.left" <|
-            \() ->
-                Expect.equal "a" (String.left 1 "abcdefg")
+    describe "Test Suite"
+        [ describe "type alias"
+            [ test "Flags contain static assets path" <|
+                \() ->
+                    Expect.equal "/path/" (App.Flags "/path/").staticAssetsPath
+            ]
+        , describe "Initial setup"
+            [
+            test "App.model.page should be set to home" <|
+                \()->
+                    let 
+                        flags = App.Flags "/path/"
+
+                        location = { href = ""
+                            , host = ""
+                            , hostname = ""
+                            , protocol = ""
+                            , origin = ""
+                            , port_ = ""
+                            , pathname = ""
+                            , search = ""
+                            , hash = ""
+                            , username = ""
+                            , password = "" 
+                            }
+
+                        model = Tuple.first (App.init flags  location)
+                    in
+                    Expect.equal model.page App.Home
+              ]
+        , describe "about page"
+            [ test "About page contains about" <|
+                \() ->
+                    let
+                        ( navState, navCmd ) =
+                            Navbar.initialState App.NavMsg
+
+                        model =
+                            { page = App.About
+                            , navState = navState
+                            , staticAssetsPath = "/path/"
+                            }
+                    in
+                        App.pageAbout model
+                            |> Expect.equal ([ h2 [] [ text "About" ] ])
+            ]
         ]
+    
