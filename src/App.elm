@@ -10,7 +10,7 @@ import Navigation exposing (Location)
 
 type alias Model =
     { page : Page
-    , navState : Navbar.State
+    , navBarState : Navbar.State
     , staticAssetsPath : String
     }
 
@@ -26,28 +26,29 @@ type Page
     | NotFound
 
 
-
 init : Flags -> Location -> ( Model, Cmd Msg )
 init flags location =
     let
-        ( navState, navCmd ) =
-            Navbar.initialState NavMsg
+        initModel =
+            { navBarState = navBarState
+            , page = Home
+            , staticAssetsPath = flags.staticAssetsPath
+            }
+
+        ( navBarState, navBarCmd ) =
+            Navbar.initialState NavbarMsg
 
         ( model, urlCmd ) =
-            urlUpdate location
-                { navState = navState
-                , page = Home
-                , staticAssetsPath = flags.staticAssetsPath
-                }
+            urlUpdate location initModel
     in
         ( model
-        , Cmd.batch [ urlCmd, navCmd ]
+        , Cmd.batch [ urlCmd, navBarCmd ]
         )
 
 
 type Msg
     = UrlChange Location
-    | NavMsg Navbar.State
+    | NavbarMsg Navbar.State
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -56,8 +57,8 @@ update msg model =
         UrlChange location ->
             urlUpdate location model
 
-        NavMsg state ->
-            ( { model | navState = state }
+        NavbarMsg state ->
+            ( { model | navBarState = state }
             , Cmd.none
             )
 
@@ -95,14 +96,29 @@ view model =
 
 menu : Model -> Html Msg
 menu model =
-    Navbar.config NavMsg
-        |> Navbar.withAnimation
-        |> Navbar.container
-        |> Navbar.brand [ href "#" ] [ text "Home"]
-        |> Navbar.items
-            [ Navbar.itemLink [ href "#about" ] [ text "About" ]
-            ]
-        |> Navbar.view model.navState
+    Grid.container []
+        [ Navbar.config NavbarMsg
+            |> Navbar.withAnimation
+            |> Navbar.collapseSmall
+            |> Navbar.container
+            |> Navbar.brand [ href "#" ]
+                [ img
+                    [ src (model.staticAssetsPath ++ "Richard.jpeg")
+                    , class "d-inline-block align-top"
+                    , style
+                        [ ( "width", "30px" )
+                        , ( "padding", "5px" )
+                        , ( "margin-right", "5px" )
+                        ]
+                    ]
+                    []
+                , text "Home"
+                ]
+            |> Navbar.items
+                [ Navbar.itemLink [ href "#about" ] [ text "About" ]
+                ]
+            |> Navbar.view model.navBarState
+        ]
 
 
 content : Model -> Html Msg
@@ -122,7 +138,7 @@ content model =
 pageHome : Model -> List (Html Msg)
 pageHome model =
     [ h1 [] [ text "Home" ]
-    , img [ src (model.staticAssetsPath ++ "Richard.jpeg") ] [] 
+    , img [ src (model.staticAssetsPath ++ "Richard.jpeg") ] []
     ]
 
 
@@ -141,4 +157,4 @@ pageNotFound =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Navbar.subscriptions model.navState NavMsg
+    Navbar.subscriptions model.navBarState NavbarMsg
