@@ -10,8 +10,8 @@ import Navigation exposing (Location)
 
 type alias Model =
     { page : Page
-    , navBarState : Navbar.State
-    , staticAssetsPath : String
+    , navbarState : Navbar.State
+    , flags : Flags
     }
 
 
@@ -30,12 +30,14 @@ init : Flags -> Location -> ( Model, Cmd Msg )
 init flags location =
     let
         initModel =
-            { navBarState = navBarState
+            { navbarState = navbarState
             , page = Home
-            , staticAssetsPath = flags.staticAssetsPath
+            , flags =
+                { staticAssetsPath = flags.staticAssetsPath
+                }
             }
 
-        ( navBarState, navBarCmd ) =
+        ( navbarState, navBarCmd ) =
             Navbar.initialState NavbarMsg
 
         ( model, urlCmd ) =
@@ -58,7 +60,7 @@ update msg model =
             urlUpdate location model
 
         NavbarMsg state ->
-            ( { model | navBarState = state }
+            ( { model | navbarState = state }
             , Cmd.none
             )
 
@@ -103,7 +105,7 @@ menu model =
             |> Navbar.container
             |> Navbar.brand [ href "#" ]
                 [ img
-                    [ src (model.staticAssetsPath ++ "Richard.jpeg")
+                    [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg")
                     , class "d-inline-block align-top"
                     , style
                         [ ( "width", "30px" )
@@ -117,7 +119,7 @@ menu model =
             |> Navbar.items
                 [ Navbar.itemLink [ href "#about" ] [ text "About" ]
                 ]
-            |> Navbar.view model.navBarState
+            |> Navbar.view model.navbarState
         ]
 
 
@@ -138,7 +140,7 @@ content model =
 pageHome : Model -> List (Html Msg)
 pageHome model =
     [ h1 [] [ text "Home" ]
-    , img [ src (model.staticAssetsPath ++ "Richard.jpeg") ] []
+    , img [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg") ] []
     ]
 
 
@@ -157,4 +159,4 @@ pageNotFound =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Navbar.subscriptions model.navBarState NavbarMsg
+    Navbar.subscriptions model.navbarState NavbarMsg

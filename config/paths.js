@@ -1,6 +1,7 @@
 const path = require('path');
 
 module.exports = {
+  staticAssets: path.resolve('./src'),
   entry: path.resolve('./src/index'),
   dist: path.resolve('./dist'),
   template: path.resolve('./src/index.html'),

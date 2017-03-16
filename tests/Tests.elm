@@ -43,14 +43,14 @@ all =
             [ test "About page contains about" <|
                 \() ->
                     let
-                        ( navState, navCmd ) =
-                            Navbar.initialState App.NavMsg
+                        ( navbarState, navCmd ) =
+                            Navbar.initialState App.NavbarMsg
 
                         model =
                             { page = App.About
-                            , navState = navState
-                            , staticAssetsPath = "/path/"
-                            }
+                            , navbarState = navbarState
+                            , flags = { staticAssetsPath = "/path/"
+                            }}
                     in
                         App.pageAbout model
                             |> Expect.equal ([ h2 [] [ text "About" ] ])
