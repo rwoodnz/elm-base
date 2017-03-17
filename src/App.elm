@@ -125,33 +125,36 @@ menu model =
 
 content : Model -> Html Msg
 content model =
-    Grid.container [] <|
+    Grid.container [] [ 
         case model.page of
             Home ->
                 pageHome model
 
             About ->
-                pageAbout model
+                pageAbout
 
             NotFound ->
                 pageNotFound
+    ]
 
-
-pageHome : Model -> List (Html Msg)
+pageHome : Model -> Html Msg
 pageHome model =
+    div [] 
     [ h1 [] [ text "Home" ]
     , img [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg") ] []
     ]
 
 
-pageAbout : Model -> List (Html Msg)
-pageAbout model =
+pageAbout : Html Msg
+pageAbout =
+    div []
     [ h2 [] [ text "About" ]
     ]
 
 
-pageNotFound : List (Html Msg)
+pageNotFound : Html Msg
 pageNotFound =
+    div []
     [ h1 [] [ text "Not found" ]
     , text "Please check your URL"
     ]

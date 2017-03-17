@@ -3,8 +3,8 @@ module Tests exposing (..)
 import Test exposing (..)
 import Expect
 import App
-import Html exposing (..)
-import Bootstrap.Navbar as Navbar
+import Test.Html.Query as Query
+import Test.Html.Selector exposing (text, tag)
 
 
 all : Test
@@ -40,20 +40,12 @@ all =
                     Expect.equal model.page App.Home
               ]
         , describe "about page"
-            [ test "About page contains about" <|
-                \() ->
-                    let
-                        ( navbarState, navCmd ) =
-                            Navbar.initialState App.NavbarMsg
-
-                        model =
-                            { page = App.About
-                            , navbarState = navbarState
-                            , flags = { staticAssetsPath = "/path/"
-                            }}
-                    in
-                        App.pageAbout model
-                            |> Expect.equal ([ h2 [] [ text "About" ] ])
+            [ test "About page contains about title" <|
+                \() -> 
+                    App.pageAbout
+                    |> Query.fromHtml
+                    |> Query.find [ tag "h2" ]
+                    |> Query.has [ text "About" ]
             ]
         ]
     
