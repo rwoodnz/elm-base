@@ -47,5 +47,12 @@ all =
                     |> Query.find [ tag "h2" ]
                     |> Query.has [ text "About" ]
             ]
+        , describe "home page"
+            [ test "Home page contains Home title" <|
+                \() -> 
+                    App.pageHome { flags = (App.Flags "/path/" )}
+                    |> Query.fromHtml
+                    |> Query.find [ tag "h1" ]
+                    |> Query.has [ text "Home" ]
+            ]
         ]
-    

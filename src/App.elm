@@ -6,13 +6,40 @@ import Bootstrap.Grid as Grid
 import Bootstrap.Navbar as Navbar
 import UrlParser exposing ((</>))
 import Navigation exposing (Location)
+import Bootstrap.Dropdown as Dropdown
+import Html.Events exposing (onInput, onWithOptions, onClick)
+import Html.Events.Extra exposing (onEnter)
+import Json.Decode as Decode
 
 
 type alias Model =
     { page : Page
     , navbarState : Navbar.State
+    , signup : Signup
     , flags : Flags
+    , dropdownState : Dropdown.State
+    , authenticationRequired : Bool
+    , authenticated : Bool
+    , role : Role
     }
+
+
+type alias Signup =
+    { email : ValidatableString
+    , password : ValidatableString
+    }
+
+
+type alias ValidatableString =
+    { text : String
+    , errors : String
+    }
+
+
+type Role
+    = Admin
+    | CustomerService
+    | User
 
 
 type alias Flags =
@@ -32,9 +59,17 @@ init flags location =
         initModel =
             { navbarState = navbarState
             , page = Home
+            , signup =
+                { email = { text = "", errors = "" }
+                , password = { text = "", errors = "" }
+                }
             , flags =
                 { staticAssetsPath = flags.staticAssetsPath
                 }
+            , dropdownState = Dropdown.initialState
+            , authenticated = False
+            , authenticationRequired = True
+            , role = User
             }
 
         ( navbarState, navBarCmd ) =
@@ -51,6 +86,11 @@ init flags location =
 type Msg
     = UrlChange Location
     | NavbarMsg Navbar.State
+    | DropdownMsg Dropdown.State
+    | AttemptLogin
+    | EmailEntry String
+    | PasswordEntry String
+    | Logout
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -61,6 +101,55 @@ update msg model =
 
         NavbarMsg state ->
             ( { model | navbarState = state }
+            , Cmd.none
+            )
+
+        DropdownMsg state ->
+            ( { model | dropdownState = state }, Cmd.none )
+
+        EmailEntry entry ->
+            let
+                emailUpdate =
+                    ValidatableString entry model.signup.email.errors
+
+                signupUpdate =
+                    Signup emailUpdate model.signup.password
+            in
+                ( { model | signup = signupUpdate }, Cmd.none )
+
+        PasswordEntry entry ->
+            let
+                passwordUpdate =
+                    ValidatableString entry model.signup.password.errors
+
+                signupUpdate =
+                    Signup model.signup.email passwordUpdate
+            in
+                ( { model | signup = signupUpdate }, Cmd.none )
+
+        AttemptLogin ->
+            let
+                emailErrors =
+                    validateText model.signup.email.text "" "Please enter a username"
+
+                passwordErrors =
+                    validateText model.signup.password.text "" "Please enter a password"
+            in
+                ( { model
+                    | signup =
+                        Signup (ValidatableString model.signup.email.text emailErrors) (ValidatableString model.signup.password.text passwordErrors)
+                    , authenticated = emailErrors == "" && passwordErrors == ""
+                  }
+                , Cmd.none
+                )
+
+        Logout ->
+            ( { model
+                | authenticated = False
+                , signup =
+                    Signup (ValidatableString model.signup.email.text "")
+                        (ValidatableString "" "")
+              }
             , Cmd.none
             )
 
@@ -90,15 +179,18 @@ routeParser =
 
 view : Model -> Html Msg
 view model =
-    div []
+    Grid.container []
         [ menu model
-        , content model
+        , if model.authenticationRequired && not model.authenticated then
+            login model
+          else
+            content model
         ]
 
 
 menu : Model -> Html Msg
 menu model =
-    Grid.container []
+    div []
         [ Navbar.config NavbarMsg
             |> Navbar.withAnimation
             |> Navbar.collapseSmall
@@ -118,6 +210,7 @@ menu model =
                 ]
             |> Navbar.items
                 [ Navbar.itemLink [ href "#about" ] [ text "About" ]
+                , Navbar.itemLink [ hidden (not model.authenticated), onClick Logout ] [ text "Logout" ]
                 ]
             |> Navbar.view model.navbarState
         ]
@@ -125,8 +218,8 @@ menu model =
 
 content : Model -> Html Msg
 content model =
-    Grid.container [] [ 
-        case model.page of
+    div []
+        [ case model.page of
             Home ->
                 pageHome model
 
@@ -135,31 +228,94 @@ content model =
 
             NotFound ->
                 pageNotFound
-    ]
+        ]
 
-pageHome : Model -> Html Msg
-pageHome model =
-    div [] 
-    [ h1 [] [ text "Home" ]
-    , img [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg") ] []
-    ]
+
+login : Model -> Html Msg
+login model =
+    div [ class "headspace" ]
+        [ div [ class "mx-auto form" ]
+            [ h4 [ class "form-heading" ]
+                [ text "Please login" ]
+            , input
+                [ onInput (\char -> EmailEntry char)
+                , onEnter AttemptLogin
+                , attribute "autofocus" ""
+                , class "form-control"
+                , name "username"
+                , placeholder "Email Address"
+                , attribute "required" ""
+                , type_ "text"
+                , value model.signup.email.text
+                ]
+                []
+            , div [ class "validation-error" ] [ text model.signup.email.errors ]
+            , input
+                [ onInput (\str -> PasswordEntry str)
+                , onEnter AttemptLogin
+                , class "form-control form-input"
+                , name "password"
+                , placeholder "Password"
+                , attribute "required" ""
+                , type_ "password"
+                , value model.signup.password.text
+                ]
+                []
+            , div [ class "validation-error" ] [ text model.signup.password.errors ]
+            , label [ class "form-checkbox" ]
+                [ input
+                    [ id "rememberMe"
+                    , name "rememberMe"
+                    , type_ "checkbox"
+                    , value "remember-me"
+                    , class "form-checkbox-box"
+                    ]
+                    []
+                , span [] [ text "  Remember me" ]
+                ]
+            , button
+                [ class "btn btn-lg btn-primary btn-block"
+                , onWithOptions "click" { stopPropagation = True, preventDefault = True } (Decode.succeed AttemptLogin)
+                ]
+                [ text "Login" ]
+            ]
+        ]
+
+
+validateText : String -> String -> String -> String
+validateText stringToValidate comparison sentence =
+    if stringToValidate == comparison then
+        sentence
+    else
+        ""
+
+
+pageHome : { a | flags : Flags } -> Html Msg
+pageHome { flags } =
+    div []
+        [ h1 [] [ text "Home" ]
+        , img [ src (flags.staticAssetsPath ++ "/Richard.jpeg") ] []
+        ]
 
 
 pageAbout : Html Msg
 pageAbout =
     div []
-    [ h2 [] [ text "About" ]
-    ]
+        [ h2 [] [ text "About" ]
+        ]
 
 
 pageNotFound : Html Msg
 pageNotFound =
     div []
-    [ h1 [] [ text "Not found" ]
-    , text "Please check your URL"
-    ]
+        [ h1 [] [ text "Not found" ]
+        , text "Please check your URL"
+        ]
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Navbar.subscriptions model.navbarState NavbarMsg
+    Sub.batch
+        [ Navbar.subscriptions model.navbarState NavbarMsg
+        , Dropdown.subscriptions model.dropdownState DropdownMsg
+        ]

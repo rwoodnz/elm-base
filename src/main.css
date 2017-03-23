@@ -1,6 +1,35 @@
 /* 
 For additional CSS beyond bootstrap. 
-As boostrap is loaded from a CDN in Index.Html, 
+As bootstrap is loaded from a CDN in Index.Html, 
 this will be applied prior to bootstrap.
 Could change that by loading bootstrap through webpack.
 */
+
+.headspace {
+    margin-top: 100px;
+}
+
+body {
+	background: #eee !important;	
+}
+
+.form {
+  width: 300px;
+  padding: 30px;
+  background-color: #fff;
+}
+
+.form-input {
+  margin: 5px 0px;
+}
+
+.form-checkbox {
+    font-size: 70%;
+	margin: 5px 0 30px;
+}
+
+.validation-error {
+    color: indianred;
+    font-size: 80%;
+}
+
