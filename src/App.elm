@@ -8,31 +8,20 @@ import UrlParser exposing ((</>))
 import Navigation exposing (Location)
 import Bootstrap.Dropdown as Dropdown
 import Html.Events exposing (onInput, onWithOptions, onClick)
-import Html.Events.Extra exposing (onEnter)
-import Json.Decode as Decode
+import Auth
+
+
+-- MODELS
 
 
 type alias Model =
     { page : Page
     , navbarState : Navbar.State
-    , signup : Signup
     , flags : Flags
     , dropdownState : Dropdown.State
     , authenticationRequired : Bool
-    , authenticated : Bool
     , role : Role
-    }
-
-
-type alias Signup =
-    { email : ValidatableString
-    , password : ValidatableString
-    }
-
-
-type alias ValidatableString =
-    { text : String
-    , errors : String
+    , authenticationModel : Auth.AuthenticationModel
     }
 
 
@@ -59,17 +48,13 @@ init flags location =
         initModel =
             { navbarState = navbarState
             , page = Home
-            , signup =
-                { email = { text = "", errors = "" }
-                , password = { text = "", errors = "" }
-                }
             , flags =
                 { staticAssetsPath = flags.staticAssetsPath
                 }
             , dropdownState = Dropdown.initialState
-            , authenticated = False
             , authenticationRequired = True
             , role = User
+            , authenticationModel = Auth.NotLoggedIn
             }
 
         ( navbarState, navBarCmd ) =
@@ -79,18 +64,29 @@ init flags location =
             urlUpdate location initModel
     in
         ( model
-        , Cmd.batch [ urlCmd, navBarCmd ]
+        , Cmd.batch
+            [ urlCmd
+            , navBarCmd
+            , Auth.getLoggedInUser ()
+            ]
         )
+
+
+
+-- MESSAGES
 
 
 type Msg
     = UrlChange Location
     | NavbarMsg Navbar.State
     | DropdownMsg Dropdown.State
-    | AttemptLogin
-    | EmailEntry String
-    | PasswordEntry String
-    | Logout
+    | LogOut
+    | HandleReceivedMaybeLoggedInUser (Maybe Auth.LoggedInUser)
+    | HandleAuthenticationResult Auth.AuthenticationResult
+
+
+
+-- UPDATE
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -107,51 +103,52 @@ update msg model =
         DropdownMsg state ->
             ( { model | dropdownState = state }, Cmd.none )
 
-        EmailEntry entry ->
+        LogOut ->
+            ( { model
+                | authenticationModel = Auth.NotLoggedIn
+              }
+            , Cmd.batch
+                [ Auth.removeLoggedInUser ()
+                , if model.authenticationRequired then
+                    Auth.showLock
+                  else
+                    Cmd.none
+                ]
+            )
+
+        HandleAuthenticationResult result ->
             let
-                emailUpdate =
-                    ValidatableString entry model.signup.email.errors
-
-                signupUpdate =
-                    Signup emailUpdate model.signup.password
+                newAuthenticationModel =
+                    Auth.handleAuthenticationRawResult result
             in
-                ( { model | signup = signupUpdate }, Cmd.none )
+                ( { model | authenticationModel = newAuthenticationModel }
+                , case newAuthenticationModel of
+                    Auth.LoggedIn user ->
+                        Auth.storeLoggedInUser user
 
-        PasswordEntry entry ->
-            let
-                passwordUpdate =
-                    ValidatableString entry model.signup.password.errors
-
-                signupUpdate =
-                    Signup model.signup.email passwordUpdate
-            in
-                ( { model | signup = signupUpdate }, Cmd.none )
-
-        AttemptLogin ->
-            let
-                emailErrors =
-                    validateText model.signup.email.text "" "Please enter a username"
-
-                passwordErrors =
-                    validateText model.signup.password.text "" "Please enter a password"
-            in
-                ( { model
-                    | signup =
-                        Signup (ValidatableString model.signup.email.text emailErrors) (ValidatableString model.signup.password.text passwordErrors)
-                    , authenticated = emailErrors == "" && passwordErrors == ""
-                  }
-                , Cmd.none
+                    Auth.NotLoggedIn ->
+                        Cmd.none
                 )
 
-        Logout ->
-            ( { model
-                | authenticated = False
-                , signup =
-                    Signup (ValidatableString model.signup.email.text "")
-                        (ValidatableString "" "")
-              }
-            , Cmd.none
-            )
+        HandleReceivedMaybeLoggedInUser maybeLoggedInUser ->
+            let
+                newAuthenticationModel =
+                    case maybeLoggedInUser of
+                        Just loggedInUser ->
+                            Auth.LoggedIn loggedInUser
+
+                        Nothing ->
+                            Auth.NotLoggedIn
+            in
+                ( { model | authenticationModel = newAuthenticationModel }
+                , if
+                    model.authenticationRequired
+                        && not (Auth.isLoggedIn model.authenticationModel)
+                  then
+                    Auth.showLock
+                  else
+                    Cmd.none
+                )
 
 
 urlUpdate : Location -> Model -> ( Model, Cmd Msg )
@@ -177,14 +174,29 @@ routeParser =
         ]
 
 
+
+-- SUBSCRIPTIONS
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.batch
+        [ Navbar.subscriptions model.navbarState NavbarMsg
+        , Dropdown.subscriptions model.dropdownState DropdownMsg
+        , Auth.receiveMaybeLoggedInUser HandleReceivedMaybeLoggedInUser
+        , Auth.getAuthResult HandleAuthenticationResult
+        ]
+
+
+
+-- VIEW
+
+
 view : Model -> Html Msg
 view model =
     Grid.container []
         [ menu model
-        , if model.authenticationRequired && not model.authenticated then
-            login model
-          else
-            content model
+        , content model
         ]
 
 
@@ -210,7 +222,7 @@ menu model =
                 ]
             |> Navbar.items
                 [ Navbar.itemLink [ href "#about" ] [ text "About" ]
-                , Navbar.itemLink [ hidden (not model.authenticated), onClick Logout ] [ text "Logout" ]
+                , Navbar.itemLink [ hidden (not (Auth.isLoggedIn model.authenticationModel)), onClick LogOut ] [ text "Logout" ]
                 ]
             |> Navbar.view model.navbarState
         ]
@@ -229,65 +241,6 @@ content model =
             NotFound ->
                 pageNotFound
         ]
-
-
-login : Model -> Html Msg
-login model =
-    div [ class "headspace" ]
-        [ div [ class "mx-auto form" ]
-            [ h4 [ class "form-heading" ]
-                [ text "Please login" ]
-            , input
-                [ onInput (\char -> EmailEntry char)
-                , onEnter AttemptLogin
-                , attribute "autofocus" ""
-                , class "form-control"
-                , name "username"
-                , placeholder "Email Address"
-                , attribute "required" ""
-                , type_ "text"
-                , value model.signup.email.text
-                ]
-                []
-            , div [ class "validation-error" ] [ text model.signup.email.errors ]
-            , input
-                [ onInput (\str -> PasswordEntry str)
-                , onEnter AttemptLogin
-                , class "form-control form-input"
-                , name "password"
-                , placeholder "Password"
-                , attribute "required" ""
-                , type_ "password"
-                , value model.signup.password.text
-                ]
-                []
-            , div [ class "validation-error" ] [ text model.signup.password.errors ]
-            , label [ class "form-checkbox" ]
-                [ input
-                    [ id "rememberMe"
-                    , name "rememberMe"
-                    , type_ "checkbox"
-                    , value "remember-me"
-                    , class "form-checkbox-box"
-                    ]
-                    []
-                , span [] [ text "  Remember me" ]
-                ]
-            , button
-                [ class "btn btn-lg btn-primary btn-block"
-                , onWithOptions "click" { stopPropagation = True, preventDefault = True } (Decode.succeed AttemptLogin)
-                ]
-                [ text "Login" ]
-            ]
-        ]
-
-
-validateText : String -> String -> String -> String
-validateText stringToValidate comparison sentence =
-    if stringToValidate == comparison then
-        sentence
-    else
-        ""
 
 
 pageHome : { a | flags : Flags } -> Html Msg
@@ -310,12 +263,4 @@ pageNotFound =
     div []
         [ h1 [] [ text "Not found" ]
         , text "Please check your URL"
-        ]
-
-
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.batch
-        [ Navbar.subscriptions model.navbarState NavbarMsg
-        , Dropdown.subscriptions model.dropdownState DropdownMsg
         ]

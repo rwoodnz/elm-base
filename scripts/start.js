@@ -23,12 +23,12 @@ var compiler = webpack(config);
 var port = 3000;
 
 compiler.plugin('invalid', function () {
-  clearConsole();
+  // clearConsole();
   console.log('Compiling...');
 });
 
 compiler.plugin('done', function (stats) {
-  clearConsole();
+  // clearConsole();
 
   var hasErrors = stats.hasErrors();
   var hasWarnings = stats.hasWarnings();

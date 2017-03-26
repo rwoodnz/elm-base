@@ -33,3 +33,14 @@ body {
     font-size: 80%;
 }
 
+.spacer {
+    margin: 5px 0;
+}
+
+/* Hide auth0 name on popup */
+.auth0-lock.auth0-lock .auth0-lock-header{
+    height: 80px !important;
+}
+.auth0-lock-name{
+    display: none;
+}
