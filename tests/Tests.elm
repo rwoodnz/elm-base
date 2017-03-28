@@ -44,7 +44,7 @@ all =
                 \() -> 
                     App.pageAbout
                     |> Query.fromHtml
-                    |> Query.find [ tag "h2" ]
+                    |> Query.find [ tag "h3" ]
                     |> Query.has [ text "About" ]
             ]
         , describe "home page"
@@ -52,7 +52,7 @@ all =
                 \() -> 
                     App.pageHome { flags = (App.Flags "/path/" )}
                     |> Query.fromHtml
-                    |> Query.find [ tag "h1" ]
+                    |> Query.find [ tag "h3" ]
                     |> Query.has [ text "Home" ]
             ]
         ]

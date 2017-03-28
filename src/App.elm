@@ -7,7 +7,7 @@ import Bootstrap.Navbar as Navbar
 import UrlParser exposing ((</>))
 import Navigation exposing (Location)
 import Bootstrap.Dropdown as Dropdown
-import Html.Events exposing (onInput, onWithOptions, onClick)
+import Html.Events exposing (onClick)
 import Auth
 
 

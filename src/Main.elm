@@ -1,8 +1,8 @@
 module Main exposing (..)
 
 import Navigation exposing (Location)
+import App exposing (view, init, update, subscriptions)
 
-import App
 
 main : Program App.Flags App.Model App.Msg
 main =
