@@ -1,5 +1,6 @@
 -- Uses Auth0
 
+
 port module Auth
     exposing
         ( AuthenticationModel(..)
@@ -8,11 +9,7 @@ port module Auth
         , showLock
         , getAuthResult
         , isLoggedIn
-        , handleAuthenticationRawResult
-        , storeLoggedInUser
-        , removeLoggedInUser
-        , getLoggedInUser
-        , receiveMaybeLoggedInUser
+        , handleReceiveAuthentication
         )
 
 -- MODELS
@@ -61,28 +58,26 @@ type alias AuthenticationResult =
     }
 
 
-handleAuthenticationRawResult : AuthenticationResult -> AuthenticationModel
-handleAuthenticationRawResult result =
-    let
-        ( newAuthenticationModel, error ) =
-            case ( result.err, result.ok ) of
-                ( Just err, _ ) ->
-                    ( NotLoggedIn, Just err )
+handleReceiveAuthentication :
+    AuthenticationResult
+    -> ( AuthenticationModel, Maybe AuthenticationError )
+handleReceiveAuthentication result =
+    case ( result.err, result.ok ) of
+        ( Just err, _ ) ->
+            ( NotLoggedIn, Just err )
 
-                ( Nothing, Nothing ) ->
-                    ( NotLoggedIn
-                    , Just
-                        { name = Nothing
-                        , code = Nothing
-                        , statusCode = Nothing
-                        , description = "No information received from authentication provider"
-                        }
-                    )
+        ( Nothing, Nothing ) ->
+            ( NotLoggedIn
+            , Just
+                { name = Nothing
+                , code = Nothing
+                , statusCode = Nothing
+                , description = "No information received from authentication provider"
+                }
+            )
 
-                ( Nothing, Just user ) ->
-                    ( LoggedIn user, Nothing )
-    in
-        newAuthenticationModel
+        ( Nothing, Just user ) ->
+            ( LoggedIn user, Nothing )
 
 
 isLoggedIn : AuthenticationModel -> Bool
@@ -120,16 +115,3 @@ getAuthResult =
 
 
 
--- LOCAL BROWSER STORAGE PORTS
-
-
-port storeLoggedInUser : LoggedInUser -> Cmd msg
-
-
-port removeLoggedInUser : () -> Cmd msg
-
-
-port getLoggedInUser : () -> Cmd msg
-
-
-port receiveMaybeLoggedInUser : (Maybe LoggedInUser -> msg) -> Sub msg

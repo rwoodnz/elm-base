@@ -44,3 +44,6 @@ body {
 .auth0-lock-name{
     display: none;
 }
+.auth0-lock-close-button{
+    display: none;
+}

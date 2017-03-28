@@ -1,4 +1,4 @@
-module App exposing (..)
+port module App exposing (..)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -42,19 +42,26 @@ type Page
     | NotFound
 
 
+
+-- There are two modes of authenticaiton:
+-- Log in mannually or
+-- AuthenticationRequired
+-- The latter requires closable has to be set to true in Auth0 options in index.js so that autoclose also works.
+
+
 init : Flags -> Location -> ( Model, Cmd Msg )
 init flags location =
     let
         initModel =
-            { navbarState = navbarState
-            , page = Home
-            , flags =
+            { flags =
                 { staticAssetsPath = flags.staticAssetsPath
                 }
-            , dropdownState = Dropdown.initialState
             , authenticationRequired = True
             , role = User
             , authenticationModel = Auth.NotLoggedIn
+            , navbarState = navbarState
+            , page = Home
+            , dropdownState = Dropdown.initialState
             }
 
         ( navbarState, navBarCmd ) =
@@ -65,9 +72,9 @@ init flags location =
     in
         ( model
         , Cmd.batch
-            [ urlCmd
+            [ getLoggedInUser ()
+            , urlCmd
             , navBarCmd
-            , Auth.getLoggedInUser ()
             ]
         )
 
@@ -81,8 +88,9 @@ type Msg
     | NavbarMsg Navbar.State
     | DropdownMsg Dropdown.State
     | LogOut
-    | HandleReceivedMaybeLoggedInUser (Maybe Auth.LoggedInUser)
-    | HandleAuthenticationResult Auth.AuthenticationResult
+    | LogIn
+    | ReceiveMaybeLoggedInUser (Maybe Auth.LoggedInUser)
+    | ReceiveAuthentication Auth.AuthenticationResult
 
 
 
@@ -96,19 +104,15 @@ update msg model =
             urlUpdate location model
 
         NavbarMsg state ->
-            ( { model | navbarState = state }
-            , Cmd.none
-            )
+            ( { model | navbarState = state }, Cmd.none )
 
         DropdownMsg state ->
             ( { model | dropdownState = state }, Cmd.none )
 
         LogOut ->
-            ( { model
-                | authenticationModel = Auth.NotLoggedIn
-              }
+            ( { model | authenticationModel = Auth.NotLoggedIn }
             , Cmd.batch
-                [ Auth.removeLoggedInUser ()
+                [ removeLoggedInUser ()
                 , if model.authenticationRequired then
                     Auth.showLock
                   else
@@ -116,21 +120,27 @@ update msg model =
                 ]
             )
 
-        HandleAuthenticationResult result ->
+        LogIn ->
+            ( model, Auth.showLock )
+
+        ReceiveAuthentication result ->
             let
-                newAuthenticationModel =
-                    Auth.handleAuthenticationRawResult result
+                ( newAuthenticationModel, error ) =
+                    Auth.handleReceiveAuthentication result
             in
-                ( { model | authenticationModel = newAuthenticationModel }
+                ( { model
+                    | authenticationModel = newAuthenticationModel
+                  }
                 , case newAuthenticationModel of
                     Auth.LoggedIn user ->
-                        Auth.storeLoggedInUser user
+                        storeLoggedInUser user
 
                     Auth.NotLoggedIn ->
                         Cmd.none
                 )
 
-        HandleReceivedMaybeLoggedInUser maybeLoggedInUser ->
+        ReceiveMaybeLoggedInUser maybeLoggedInUser ->
+            -- Auth.handleMaybeLoggedInUser model maybeLoggedInUser
             let
                 newAuthenticationModel =
                     case maybeLoggedInUser of
@@ -140,10 +150,12 @@ update msg model =
                         Nothing ->
                             Auth.NotLoggedIn
             in
-                ( { model | authenticationModel = newAuthenticationModel }
+                ( { model
+                    | authenticationModel = newAuthenticationModel
+                  }
                 , if
                     model.authenticationRequired
-                        && not (Auth.isLoggedIn model.authenticationModel)
+                        && not (Auth.isLoggedIn newAuthenticationModel)
                   then
                     Auth.showLock
                   else
@@ -183,8 +195,8 @@ subscriptions model =
     Sub.batch
         [ Navbar.subscriptions model.navbarState NavbarMsg
         , Dropdown.subscriptions model.dropdownState DropdownMsg
-        , Auth.receiveMaybeLoggedInUser HandleReceivedMaybeLoggedInUser
-        , Auth.getAuthResult HandleAuthenticationResult
+        , receiveMaybeLoggedInUser ReceiveMaybeLoggedInUser
+        , Auth.getAuthResult ReceiveAuthentication
         ]
 
 
@@ -196,7 +208,13 @@ view : Model -> Html Msg
 view model =
     Grid.container []
         [ menu model
-        , content model
+        , if
+            model.authenticationRequired
+                && not (Auth.isLoggedIn model.authenticationModel)
+          then
+            login model
+          else
+            content model
         ]
 
 
@@ -218,11 +236,12 @@ menu model =
                         ]
                     ]
                     []
-                , text "Home"
+                , text "Elm-base"
                 ]
             |> Navbar.items
                 [ Navbar.itemLink [ href "#about" ] [ text "About" ]
-                , Navbar.itemLink [ hidden (not (Auth.isLoggedIn model.authenticationModel)), onClick LogOut ] [ text "Logout" ]
+                , Navbar.itemLink [ hidden (not (Auth.isLoggedIn model.authenticationModel)), onClick LogOut ] [ text "Log out" ]
+                , Navbar.itemLink [ hidden (Auth.isLoggedIn model.authenticationModel), onClick LogIn ] [ text "Log in or sign up" ]
                 ]
             |> Navbar.view model.navbarState
         ]
@@ -243,10 +262,15 @@ content model =
         ]
 
 
+login : Model -> Html Msg
+login model =
+    div [] []
+
+
 pageHome : { a | flags : Flags } -> Html Msg
 pageHome { flags } =
     div []
-        [ h1 [] [ text "Home" ]
+        [ h3 [] [ text "Home" ]
         , img [ src (flags.staticAssetsPath ++ "/Richard.jpeg") ] []
         ]
 
@@ -254,13 +278,29 @@ pageHome { flags } =
 pageAbout : Html Msg
 pageAbout =
     div []
-        [ h2 [] [ text "About" ]
+        [ h3 [] [ text "About" ]
         ]
 
 
 pageNotFound : Html Msg
 pageNotFound =
     div []
-        [ h1 [] [ text "Not found" ]
+        [ h3 [] [ text "Not found" ]
         , text "Please check your URL"
         ]
+
+
+
+-- LOCAL BROWSER STORAGE PORTS
+
+
+port storeLoggedInUser : Auth.LoggedInUser -> Cmd msg
+
+
+port removeLoggedInUser : () -> Cmd msg
+
+
+port getLoggedInUser : () -> Cmd msg
+
+
+port receiveMaybeLoggedInUser : (Maybe Auth.LoggedInUser -> msg) -> Sub msg
