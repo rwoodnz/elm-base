@@ -23,7 +23,7 @@ type AuthenticationModel
 type alias LoggedInUser =
     { profile : UserProfile
     , token : Token
-    }
+    }git 
 
 
 type alias UserProfile =

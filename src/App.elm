@@ -140,7 +140,6 @@ update msg model =
                 )
 
         ReceiveMaybeLoggedInUser maybeLoggedInUser ->
-            -- Auth.handleMaybeLoggedInUser model maybeLoggedInUser
             let
                 newAuthenticationModel =
                     case maybeLoggedInUser of
