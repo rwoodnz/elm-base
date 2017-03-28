@@ -7,3 +7,4 @@ https://rundis.github.io/blog/2017/elm_bootstrap_launch.html
 
 Have included Auth0 for authentication, originally based on their example code - have tried to keep as much of this as possible in one file in case anyone wants to make sense of it.
 
+Feel free to fire suggestions/pull requests at me. Always interested in help with elm style as well.
