@@ -5,6 +5,7 @@ import Expect
 import App
 import Test.Html.Query as Query
 import Test.Html.Selector exposing (text, tag)
+import Http
 
 
 all : Test

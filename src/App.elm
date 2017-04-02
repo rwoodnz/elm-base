@@ -26,6 +26,7 @@ type alias Model =
     , role : Role
     , authenticationModel : Auth.AuthenticationModel
     , globalAlert : String
+    , existingLoginHasBeenChecked : Bool
     }
 
 
@@ -61,13 +62,14 @@ init flags location =
             { flags =
                 { staticAssetsPath = flags.staticAssetsPath
                 }
-            , authenticationRequired = True
+            , authenticationRequired = False
             , role = User
             , authenticationModel = Auth.NotLoggedIn
             , navbarState = navbarState
             , page = Home
             , dropdownState = Dropdown.initialState
             , globalAlert = ""
+            , existingLoginHasBeenChecked = False
             }
 
         ( navbarState, navBarCmd ) =
@@ -110,6 +112,28 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        ReceiveMaybeLoggedInUser maybeLoggedInUser ->
+            case maybeLoggedInUser of
+                Just user ->
+                    -- TODO check token has not expired 
+                    ( { model
+                        | authenticationModel = Auth.LoggedIn user
+                        , existingLoginHasBeenChecked = True
+                      }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( { model
+                        | authenticationModel = Auth.NotLoggedIn
+                        , existingLoginHasBeenChecked = True
+                      }
+                    , if model.authenticationRequired then
+                        Auth.showLock
+                      else
+                        Cmd.none
+                    )
+
         UrlChange location ->
             urlUpdate location model
 
@@ -121,13 +145,7 @@ update msg model =
 
         LogOut ->
             ( { model | authenticationModel = Auth.NotLoggedIn }
-            , Cmd.batch
-                [ removeLoggedInUser ()
-                , if model.authenticationRequired then
-                    Auth.showLock
-                  else
-                    Cmd.none
-                ]
+            , removeLoggedInUser ()
             )
 
         LogIn ->
@@ -149,31 +167,11 @@ update msg model =
                         Cmd.none
                 )
 
-        ReceiveMaybeLoggedInUser maybeLoggedInUser ->
-            case maybeLoggedInUser of
-                Just user ->
-                    ( { model
-                        | authenticationModel = Auth.LoggedIn user
-                      }
-                    , Cmd.none
-                    )
-
-                Nothing ->
-                    ( { model | authenticationModel = Auth.NotLoggedIn }
-                    , if model.authenticationRequired then
-                        Auth.showLock
-                      else
-                        Cmd.none
-                    )
-
         CallPrivateApi ->
             case model.authenticationModel of
                 Auth.NotLoggedIn ->
                     ( { model | globalAlert = "Not logged in" }
-                    , if model.authenticationRequired then
-                        Auth.showLock
-                      else
-                        Cmd.none
+                    , Cmd.none
                     )
 
                 Auth.LoggedIn user ->
@@ -197,16 +195,16 @@ update msg model =
 
                 Err errorMessage ->
                     ( { model | globalAlert = "Data could not be retrieved from the private API" }
-                    , if model.authenticationRequired then
-                        Auth.showLock
-                      else
-                        Cmd.none
+                      -- , if model.authenticationRequired then
+                      --     Auth.showLock
+                      --   else
+                    , Cmd.none
                     )
 
 
 urlUpdate : Location -> Model -> ( Model, Cmd Msg )
 urlUpdate location model =
-    case decode location of
+    case decodeLocation location of
         Nothing ->
             ( { model | page = NotFound }, Cmd.none )
 
@@ -214,8 +212,8 @@ urlUpdate location model =
             ( { model | page = route }, Cmd.none )
 
 
-decode : Location -> Maybe Page
-decode location =
+decodeLocation : Location -> Maybe Page
+decodeLocation location =
     UrlParser.parseHash routeParser location
 
 
