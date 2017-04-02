@@ -244,7 +244,7 @@ tokenExpired model =
     in
         case expiryResult of
             Ok result ->
-                False
+                result
 
             Err _ ->
                 True
