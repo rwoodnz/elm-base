@@ -12,6 +12,8 @@ import Auth
 import Http
 import Json.Decode exposing (string, field, decodeString, Decoder)
 import Json.Decode.Pipeline exposing (decode, required)
+import Time exposing (Time, every, second, minute)
+import Jwt exposing (isExpired)
 
 
 -- MODELS
@@ -25,9 +27,14 @@ type alias Model =
     , authenticationRequired : Bool
     , role : Role
     , authenticationModel : Auth.AuthenticationModel
-    , globalAlert : String
+    , globalAlert : Maybe Alert
     , existingLoginHasBeenChecked : Bool
+    , theTime : Maybe Time
     }
+
+
+type alias Alert =
+    { message : String, start : Time, duration : Time }
 
 
 type Role
@@ -37,8 +44,7 @@ type Role
 
 
 type alias Flags =
-    { staticAssetsPath : String
-    }
+    { staticAssetsPath : String }
 
 
 type Page
@@ -62,14 +68,15 @@ init flags location =
             { flags =
                 { staticAssetsPath = flags.staticAssetsPath
                 }
-            , authenticationRequired = False
+            , authenticationRequired = True
             , role = User
             , authenticationModel = Auth.NotLoggedIn
             , navbarState = navbarState
             , page = Home
             , dropdownState = Dropdown.initialState
-            , globalAlert = ""
+            , globalAlert = Nothing
             , existingLoginHasBeenChecked = False
+            , theTime = Nothing
             }
 
         ( navbarState, navBarCmd ) =
@@ -103,6 +110,7 @@ type Msg
     | CallPublicApi
     | PublicApiMessage (Result Http.Error ApiResponse)
     | PrivateApiMessage (Result Http.Error ApiResponse)
+    | ReceiveTime Time
 
 
 
@@ -112,10 +120,24 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        ReceiveTime time ->
+            ( { model
+                | theTime = Just time
+                , globalAlert =
+                    if alertExpired model then
+                        Nothing
+                    else
+                        model.globalAlert
+              }
+            , if model.authenticationRequired && (tokenExpired model) then
+                Auth.showLock
+              else
+                Cmd.none
+            )
+
         ReceiveMaybeLoggedInUser maybeLoggedInUser ->
             case maybeLoggedInUser of
                 Just user ->
-                    -- TODO check token has not expired 
                     ( { model
                         | authenticationModel = Auth.LoggedIn user
                         , existingLoginHasBeenChecked = True
@@ -170,7 +192,7 @@ update msg model =
         CallPrivateApi ->
             case model.authenticationModel of
                 Auth.NotLoggedIn ->
-                    ( { model | globalAlert = "Not logged in" }
+                    ( { model | globalAlert = setGlobalAlert model "Not logged in" (5 * minute) }
                     , Cmd.none
                     )
 
@@ -183,23 +205,59 @@ update msg model =
         PublicApiMessage response ->
             case response of
                 Ok apiMessage ->
-                    ( { model | globalAlert = apiMessage.message }, Cmd.none )
+                    ( { model | globalAlert = setGlobalAlert model apiMessage.message (1 * minute) }, Cmd.none )
 
                 Err errorMessage ->
-                    ( { model | globalAlert = "Data could not be retrieved from the public API" }, Cmd.none )
+                    ( { model | globalAlert = setGlobalAlert model "Data could not be retrieved from the public API" (1 * minute) }, Cmd.none )
 
         PrivateApiMessage result ->
             case result of
                 Ok apiMessage ->
-                    ( { model | globalAlert = apiMessage.message }, Cmd.none )
+                    ( { model | globalAlert = setGlobalAlert model apiMessage.message (1 * minute) }, Cmd.none )
 
                 Err errorMessage ->
-                    ( { model | globalAlert = "Data could not be retrieved from the private API" }
-                      -- , if model.authenticationRequired then
-                      --     Auth.showLock
-                      --   else
+                    ( { model | globalAlert = setGlobalAlert model "Data could not be retrieved from the private API" (1 * minute) }
                     , Cmd.none
                     )
+
+
+alertExpired : Model -> Bool
+alertExpired model =
+    case ( model.globalAlert, model.theTime ) of
+        ( Just alert, Just time ) ->
+            (time - (alert.start + alert.duration) > 0)
+
+        ( _, _ ) ->
+            False
+
+
+tokenExpired : Model -> Bool
+tokenExpired model =
+    let
+        expiryResult =
+            case ( model.theTime, model.authenticationModel ) of
+                ( Just time, Auth.LoggedIn user ) ->
+                    isExpired time user.token
+
+                _ ->
+                    Ok False
+    in
+        case expiryResult of
+            Ok result ->
+                False
+
+            Err _ ->
+                True
+
+
+setGlobalAlert : Model -> String -> Time -> Maybe Alert
+setGlobalAlert model message duration =
+    case model.theTime of
+        Nothing ->
+            Nothing
+
+        Just time ->
+            Just { message = message, start = time, duration = duration }
 
 
 urlUpdate : Location -> Model -> ( Model, Cmd Msg )
@@ -236,6 +294,7 @@ subscriptions model =
         , Dropdown.subscriptions model.dropdownState DropdownMsg
         , receiveMaybeLoggedInUser ReceiveMaybeLoggedInUser
         , Auth.getAuthResult ReceiveAuthentication
+        , every (5 * second) ReceiveTime
         ]
 
 
@@ -291,9 +350,17 @@ content model =
     div []
         [ div
             [ class "alert alert-success my-2"
-            , hidden (model.globalAlert == "")
+            , hidden (model.globalAlert == Nothing)
             ]
-            [ text model.globalAlert ]
+            [ text
+                (case model.globalAlert of
+                    Nothing ->
+                        ""
+
+                    Just alert ->
+                        alert.message
+                )
+            ]
         , case model.page of
             Home ->
                 pageHome model
@@ -311,15 +378,17 @@ login model =
     div [] []
 
 
-pageHome : { a | flags : Flags } -> Html Msg
-pageHome { flags } =
+pageHome : Model -> Html Msg
+pageHome model =
     div []
         [ h3 [] [ text "Home" ]
         , div []
             [ button [ onClick CallPublicApi ] [ text "PublicApi" ]
             , button [ onClick CallPrivateApi ] [ text "PrivateApi" ]
             ]
-        , img [ src (flags.staticAssetsPath ++ "/Richard.jpeg") ] []
+        , text ("Time: " ++ Maybe.withDefault "" (Maybe.map toString model.theTime))
+        , div []
+            [ img [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg") ] [] ]
         ]
 
 
