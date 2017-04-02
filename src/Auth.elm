@@ -112,6 +112,3 @@ port auth0authResult : (AuthenticationResult -> msg) -> Sub msg
 getAuthResult : (AuthenticationResult -> msg) -> Sub msg
 getAuthResult =
     auth0authResult
-
-
-

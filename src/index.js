@@ -69,7 +69,7 @@ lock.on("authenticated", function (authResult) {
             result.err = err.details;
             result.err.name = result.err.name ? result.err.name : null;
             result.err.code = result.err.code ? result.err.code : null;
-            result.err.statusCode = result.err.statusCode ? result.err.statusCode : null;
+            result.err.statusCode = result.err.statusCode ?result.err.statusCode : null;
         }
         else {
             result.ok = { profile: profile, token: token };

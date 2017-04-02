@@ -9,6 +9,9 @@ import Navigation exposing (Location)
 import Bootstrap.Dropdown as Dropdown
 import Html.Events exposing (onClick)
 import Auth
+import Http
+import Json.Decode exposing (string, field, decodeString, Decoder)
+import Json.Decode.Pipeline exposing (decode, required)
 
 
 -- MODELS
@@ -22,6 +25,7 @@ type alias Model =
     , authenticationRequired : Bool
     , role : Role
     , authenticationModel : Auth.AuthenticationModel
+    , globalAlert : String
     }
 
 
@@ -43,6 +47,7 @@ type Page
 
 
 
+-- INITIALISATION
 -- There are two modes of authenticaiton:
 -- Log in mannually or
 -- AuthenticationRequired
@@ -62,6 +67,7 @@ init flags location =
             , navbarState = navbarState
             , page = Home
             , dropdownState = Dropdown.initialState
+            , globalAlert = ""
             }
 
         ( navbarState, navBarCmd ) =
@@ -91,6 +97,10 @@ type Msg
     | LogIn
     | ReceiveMaybeLoggedInUser (Maybe Auth.LoggedInUser)
     | ReceiveAuthentication Auth.AuthenticationResult
+    | CallPrivateApi
+    | CallPublicApi
+    | PublicApiMessage (Result Http.Error ApiResponse)
+    | PrivateApiMessage (Result Http.Error ApiResponse)
 
 
 
@@ -140,26 +150,58 @@ update msg model =
                 )
 
         ReceiveMaybeLoggedInUser maybeLoggedInUser ->
-            let
-                newAuthenticationModel =
-                    case maybeLoggedInUser of
-                        Just loggedInUser ->
-                            Auth.LoggedIn loggedInUser
+            case maybeLoggedInUser of
+                Just user ->
+                    ( { model
+                        | authenticationModel = Auth.LoggedIn user
+                      }
+                    , Cmd.none
+                    )
 
-                        Nothing ->
-                            Auth.NotLoggedIn
-            in
-                ( { model
-                    | authenticationModel = newAuthenticationModel
-                  }
-                , if
-                    model.authenticationRequired
-                        && not (Auth.isLoggedIn newAuthenticationModel)
-                  then
-                    Auth.showLock
-                  else
-                    Cmd.none
-                )
+                Nothing ->
+                    ( { model | authenticationModel = Auth.NotLoggedIn }
+                    , if model.authenticationRequired then
+                        Auth.showLock
+                      else
+                        Cmd.none
+                    )
+
+        CallPrivateApi ->
+            case model.authenticationModel of
+                Auth.NotLoggedIn ->
+                    ( { model | globalAlert = "Not logged in" }
+                    , if model.authenticationRequired then
+                        Auth.showLock
+                      else
+                        Cmd.none
+                    )
+
+                Auth.LoggedIn user ->
+                    ( model, (getPrivateApi user.token) )
+
+        CallPublicApi ->
+            ( model, (getPublicApi) )
+
+        PublicApiMessage response ->
+            case response of
+                Ok apiMessage ->
+                    ( { model | globalAlert = apiMessage.message }, Cmd.none )
+
+                Err errorMessage ->
+                    ( { model | globalAlert = "Data could not be retrieved from the public API" }, Cmd.none )
+
+        PrivateApiMessage result ->
+            case result of
+                Ok apiMessage ->
+                    ( { model | globalAlert = apiMessage.message }, Cmd.none )
+
+                Err errorMessage ->
+                    ( { model | globalAlert = "Data could not be retrieved from the private API" }
+                    , if model.authenticationRequired then
+                        Auth.showLock
+                      else
+                        Cmd.none
+                    )
 
 
 urlUpdate : Location -> Model -> ( Model, Cmd Msg )
@@ -249,7 +291,12 @@ menu model =
 content : Model -> Html Msg
 content model =
     div []
-        [ case model.page of
+        [ div
+            [ class "alert alert-success my-2"
+            , hidden (model.globalAlert == "")
+            ]
+            [ text model.globalAlert ]
+        , case model.page of
             Home ->
                 pageHome model
 
@@ -270,6 +317,10 @@ pageHome : { a | flags : Flags } -> Html Msg
 pageHome { flags } =
     div []
         [ h3 [] [ text "Home" ]
+        , div []
+            [ button [ onClick CallPublicApi ] [ text "PublicApi" ]
+            , button [ onClick CallPrivateApi ] [ text "PrivateApi" ]
+            ]
         , img [ src (flags.staticAssetsPath ++ "/Richard.jpeg") ] []
         ]
 
@@ -303,3 +354,55 @@ port getLoggedInUser : () -> Cmd msg
 
 
 port receiveMaybeLoggedInUser : (Maybe Auth.LoggedInUser -> msg) -> Sub msg
+
+
+
+-- HTTP CALLS
+
+
+publicEndpoint : String
+publicEndpoint =
+    "https://69i7tvprb7.execute-api.us-east-1.amazonaws.com/dev/api/public"
+
+
+privateEndpoint : String
+privateEndpoint =
+    "https://69i7tvprb7.execute-api.us-east-1.amazonaws.com/dev/api/private"
+
+
+type alias ApiResponse =
+    { message : String }
+
+
+getPublicApi : Cmd Msg
+getPublicApi =
+    let
+        apiMessageRequest =
+            Http.get publicEndpoint decodeMsg
+    in
+        Http.send PublicApiMessage apiMessageRequest
+
+
+privateApiRequest : String -> Http.Request ApiResponse
+privateApiRequest token =
+    { method = "GET"
+    , headers =
+        [ Http.header "Authorization" ("Bearer " ++ token) ]
+    , url = privateEndpoint
+    , body = Http.emptyBody
+    , expect = Http.expectJson decodeMsg
+    , timeout = Nothing
+    , withCredentials = False
+    }
+        |> Http.request
+
+
+getPrivateApi : String -> Cmd Msg
+getPrivateApi token =
+    Http.send PrivateApiMessage (privateApiRequest token)
+
+
+decodeMsg : Decoder ApiResponse
+decodeMsg =
+    Json.Decode.Pipeline.decode ApiResponse
+        |> Json.Decode.Pipeline.optional "message" string "No message"
