@@ -29,16 +29,11 @@ type alias Model =
     , authenticationRequired : Bool
     , role : Role
     , authenticationModel : Auth.AuthenticationModel
-    , globalAlert : Maybe Alert
+    , globalAlert : Alert
     , existingLoginHasBeenChecked : Bool
     , theTime : Time
     , endpoints : Endpoints
     }
-
-
-type alias Alert =
-    { message : String, start : Time, duration : Time }
-
 
 type Role
     = Admin
@@ -57,7 +52,12 @@ type Page
     | About
     | NotFound
 
+type alias Alert =
+    { message : String, start : Time, duration : Time }
 
+emptyAlert: Alert
+emptyAlert = 
+    Alert "" 0 0
 
 -- INITIALISATION
 -- There are two modes of authenticaiton:
@@ -80,7 +80,7 @@ init flags location =
             , navbarState = navbarState
             , page = Home
             , dropdownState = Dropdown.initialState
-            , globalAlert = Nothing
+            , globalAlert = emptyAlert
             , existingLoginHasBeenChecked = False
             , theTime = flags.startTime
             , endpoints = { publicExample = "", privateExample = "" }
@@ -102,7 +102,6 @@ init flags location =
         )
 
 
-
 -- MESSAGES
 
 
@@ -122,6 +121,11 @@ type Msg
     | ReceiveEndpoints Endpoints
     | CloseGLobalAlert
 
+-- GENERAL HELPERS
+
+
+iff condition a b = 
+    if condition then a else b
 
 
 -- UPDATE
@@ -133,15 +137,11 @@ update msg model =
         ReceiveTime time ->
             ( { model
                 | theTime = time
-                , globalAlert =
-                    if alertExpired model then
-                        Nothing
-                    else
-                        model.globalAlert
+                , globalAlert = iff (alertExpired model.globalAlert model.theTime) 
+                    emptyAlert model.globalAlert 
               }
-            , if model.authenticationRequired && (tokenExpired model) then
+            , iff (model.authenticationRequired && (tokenExpired model))
                 Auth.showLock
-              else
                 Cmd.none
             )
 
@@ -160,9 +160,8 @@ update msg model =
                         | authenticationModel = Auth.NotLoggedIn
                         , existingLoginHasBeenChecked = True
                       }
-                    , if model.authenticationRequired then
+                    , iff model.authenticationRequired 
                         Auth.showLock
-                      else
                         Cmd.none
                     )
 
@@ -202,7 +201,7 @@ update msg model =
         CallPrivateApi ->
             case model.authenticationModel of
                 Auth.NotLoggedIn ->
-                    ( { model | globalAlert = setGlobalAlert model "Not logged in" (5 * minute) }
+                    ( { model | globalAlert = Alert "Not logged in" model.theTime (5 * minute) }
                     , Cmd.none
                     )
 
@@ -215,18 +214,18 @@ update msg model =
         PublicApiMessage response ->
             case response of
                 Ok apiMessage ->
-                    ( { model | globalAlert = setGlobalAlert model apiMessage.message (1 * minute) }, Cmd.none )
+                    ( { model | globalAlert = Alert apiMessage.message model.theTime (1 * minute) }, Cmd.none )
 
                 Err errorMessage ->
-                    ( { model | globalAlert = setGlobalAlert model "Data could not be retrieved from the public API" (1 * minute) }, Cmd.none )
+                    ( { model | globalAlert = Alert "Data could not be retrieved from the public API" model.theTime (1 * minute) }, Cmd.none )
 
         PrivateApiMessage result ->
             case result of
                 Ok apiMessage ->
-                    ( { model | globalAlert = setGlobalAlert model apiMessage.message (1 * minute) }, Cmd.none )
+                    ( { model | globalAlert = Alert apiMessage.message model.theTime (1 * minute) }, Cmd.none )
 
                 Err errorMessage ->
-                    ( { model | globalAlert = setGlobalAlert model "Data could not be retrieved from the private API" (1 * minute) }
+                    ( { model | globalAlert = Alert "Data could not be retrieved from the private API" model.theTime (1 * minute) }
                     , Cmd.none
                     )
 
@@ -234,18 +233,12 @@ update msg model =
             ( { model | endpoints = endpoints }, Cmd.none )
 
         CloseGLobalAlert ->
-            ( {model | globalAlert = Nothing } , Cmd.none )
+            ( { model | globalAlert = emptyAlert }, Cmd.none )
 
 
-alertExpired : Model -> Bool
-alertExpired model =
-    case model.globalAlert of
-        Just alert ->
-            model.theTime - (alert.start + alert.duration) > 0
-
-        Nothing ->
-            False
-
+alertExpired : Alert -> Time -> Bool
+alertExpired alert time =
+    time - (alert.start + alert.duration) > 0
 
 tokenExpired : Model -> Bool
 tokenExpired model =
@@ -259,11 +252,6 @@ tokenExpired model =
                     Ok False
     in
         Result.withDefault True expiryResult
-
-
-setGlobalAlert : Model -> String -> Time -> Maybe Alert
-setGlobalAlert model message duration =
-    Just { message = message, start = model.theTime, duration = duration }
 
 
 urlUpdate : Location -> Model -> ( Model, Cmd Msg )
@@ -334,9 +322,10 @@ menu model =
                 [ img
                     [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg")
                     , class "d-inline-block align-top"
+                    , width 30
                     , style
-                        [ ( "width", "30px" )
-                        , ( "padding", "5px" )
+                        [ 
+                         ( "padding", "5px" )
                         , ( "margin-right", "5px" )
                         ]
                     ]
@@ -351,16 +340,15 @@ menu model =
             |> Navbar.view model.navbarState
         ]
 
-
 content : Model -> Html Msg
 content model =
     div []
-        [ div [ class "mt-2", hidden (model.globalAlert == Nothing) ]
+        [ div [ class "mt-2", hidden (model.globalAlert == emptyAlert) ]
             [ Alert.info
-                [  button [class "close", onClick CloseGLobalAlert ]
-                  [span [] [text "x" ]]
-                    
-                    , text (Maybe.withDefault "" (Maybe.map .message model.globalAlert)) ]
+                [ Button.button [ Button.attrs [class "close", onClick CloseGLobalAlert] ]
+                    [ span [] [ text "x" ] ]
+                , text model.globalAlert.message
+                ]
             ]
         , case model.page of
             Home ->
@@ -382,7 +370,7 @@ login model =
 pageHome : Model -> Html Msg
 pageHome model =
     div []
-        [ h3 [class "mt-2"] [ text "Home" ]
+        [ h3 [ class "mt-2" ] [ text "Home" ]
         , div []
             [ Button.button
                 [ Button.primary
@@ -391,20 +379,20 @@ pageHome model =
                 [ text "Public Api" ]
             , Button.button
                 [ Button.primary
-                , Button.attrs [ onClick CallPrivateApi ] 
+                , Button.attrs [ onClick CallPrivateApi ]
                 ]
                 [ text "Private Api" ]
             ]
         , text ("Time: " ++ toString model.theTime)
         , div [ class "wrapper", width 400 ]
-            [ img [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg"), width 300 ] [] ]
+            [ img [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg"), width 300, class "rounded" ] [] ]
         ]
 
 
 pageAbout : Html Msg
 pageAbout =
     div []
-        [ h3 [class "mt-2"] [ text "About" ]
+        [ h3 [ class "mt-2" ] [ text "About" ]
         ]
 
 
