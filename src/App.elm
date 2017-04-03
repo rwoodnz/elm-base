@@ -35,6 +35,7 @@ type alias Model =
     , endpoints : Endpoints
     }
 
+
 type Role
     = Admin
     | CustomerService
@@ -52,12 +53,16 @@ type Page
     | About
     | NotFound
 
+
 type alias Alert =
     { message : String, start : Time, duration : Time }
 
-emptyAlert: Alert
-emptyAlert = 
+
+emptyAlert : Alert
+emptyAlert =
     Alert "" 0 0
+
+
 
 -- INITIALISATION
 -- There are two modes of authenticaiton:
@@ -102,6 +107,7 @@ init flags location =
         )
 
 
+
 -- MESSAGES
 
 
@@ -121,11 +127,18 @@ type Msg
     | ReceiveEndpoints Endpoints
     | CloseGLobalAlert
 
+
+
 -- GENERAL HELPERS
 
 
-iff condition a b = 
-    if condition then a else b
+iff : Bool -> a -> a -> a
+iff condition a b =
+    if condition then
+        a
+    else
+        b
+
 
 
 -- UPDATE
@@ -137,8 +150,10 @@ update msg model =
         ReceiveTime time ->
             ( { model
                 | theTime = time
-                , globalAlert = iff (alertExpired model.globalAlert model.theTime) 
-                    emptyAlert model.globalAlert 
+                , globalAlert =
+                    iff (alertExpired model.globalAlert model.theTime)
+                        emptyAlert
+                        model.globalAlert
               }
             , iff (model.authenticationRequired && (tokenExpired model))
                 Auth.showLock
@@ -160,7 +175,7 @@ update msg model =
                         | authenticationModel = Auth.NotLoggedIn
                         , existingLoginHasBeenChecked = True
                       }
-                    , iff model.authenticationRequired 
+                    , iff model.authenticationRequired
                         Auth.showLock
                         Cmd.none
                     )
@@ -239,6 +254,7 @@ update msg model =
 alertExpired : Alert -> Time -> Bool
 alertExpired alert time =
     time - (alert.start + alert.duration) > 0
+
 
 tokenExpired : Model -> Bool
 tokenExpired model =
@@ -324,8 +340,7 @@ menu model =
                     , class "d-inline-block align-top"
                     , width 30
                     , style
-                        [ 
-                         ( "padding", "5px" )
+                        [ ( "padding", "5px" )
                         , ( "margin-right", "5px" )
                         ]
                     ]
@@ -340,12 +355,13 @@ menu model =
             |> Navbar.view model.navbarState
         ]
 
+
 content : Model -> Html Msg
 content model =
     div []
         [ div [ class "mt-2", hidden (model.globalAlert == emptyAlert) ]
             [ Alert.info
-                [ Button.button [ Button.attrs [class "close", onClick CloseGLobalAlert] ]
+                [ Button.button [ Button.attrs [ class "close", onClick CloseGLobalAlert ] ]
                     [ span [] [ text "x" ] ]
                 , text model.globalAlert.message
                 ]
