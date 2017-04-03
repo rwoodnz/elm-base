@@ -30,6 +30,7 @@ type alias Model =
     , globalAlert : Maybe Alert
     , existingLoginHasBeenChecked : Bool
     , theTime : Maybe Time
+    , endpoints : Endpoints
     }
 
 
@@ -77,6 +78,7 @@ init flags location =
             , globalAlert = Nothing
             , existingLoginHasBeenChecked = False
             , theTime = Nothing
+            , endpoints = { publicExample = "", privateExample = "" }
             }
 
         ( navbarState, navBarCmd ) =
@@ -90,6 +92,7 @@ init flags location =
             [ getLoggedInUser ()
             , urlCmd
             , navBarCmd
+            , getEndpoints ()
             ]
         )
 
@@ -111,6 +114,7 @@ type Msg
     | PublicApiMessage (Result Http.Error ApiResponse)
     | PrivateApiMessage (Result Http.Error ApiResponse)
     | ReceiveTime Time
+    | ReceiveEndpoints Endpoints
 
 
 
@@ -197,10 +201,10 @@ update msg model =
                     )
 
                 Auth.LoggedIn user ->
-                    ( model, (getPrivateApi user.token) )
+                    ( model, (getPrivateApi model.endpoints user.token) )
 
         CallPublicApi ->
-            ( model, (getPublicApi) )
+            ( model, (getPublicApi model.endpoints) )
 
         PublicApiMessage response ->
             case response of
@@ -219,6 +223,9 @@ update msg model =
                     ( { model | globalAlert = setGlobalAlert model "Data could not be retrieved from the private API" (1 * minute) }
                     , Cmd.none
                     )
+
+        ReceiveEndpoints endpoints ->
+            ( { model | endpoints = endpoints }, Cmd.none )
 
 
 alertExpired : Model -> Bool
@@ -295,6 +302,7 @@ subscriptions model =
         , receiveMaybeLoggedInUser ReceiveMaybeLoggedInUser
         , Auth.getAuthResult ReceiveAuthentication
         , every (5 * second) ReceiveTime
+        , receiveEndpoints ReceiveEndpoints
         ]
 
 
@@ -424,38 +432,38 @@ port receiveMaybeLoggedInUser : (Maybe Auth.LoggedInUser -> msg) -> Sub msg
 
 
 
--- HTTP CALLS
+-- HTTP
 
 
-publicEndpoint : String
-publicEndpoint =
-    "https://69i7tvprb7.execute-api.us-east-1.amazonaws.com/dev/api/public"
+type alias Endpoints =
+    { publicExample : String, privateExample : String }
 
 
-privateEndpoint : String
-privateEndpoint =
-    "https://69i7tvprb7.execute-api.us-east-1.amazonaws.com/dev/api/private"
+port getEndpoints : () -> Cmd msg
+
+
+port receiveEndpoints : (Endpoints -> msg) -> Sub msg
 
 
 type alias ApiResponse =
     { message : String }
 
 
-getPublicApi : Cmd Msg
-getPublicApi =
+getPublicApi : Endpoints -> Cmd Msg
+getPublicApi endpoints =
     let
         apiMessageRequest =
-            Http.get publicEndpoint decodeMsg
+            Http.get endpoints.publicExample decodeMsg
     in
         Http.send PublicApiMessage apiMessageRequest
 
 
-privateApiRequest : String -> Http.Request ApiResponse
-privateApiRequest token =
+privateApiRequest : Endpoints -> String -> Http.Request ApiResponse
+privateApiRequest endpoints token =
     { method = "GET"
     , headers =
         [ Http.header "Authorization" ("Bearer " ++ token) ]
-    , url = privateEndpoint
+    , url = endpoints.privateExample
     , body = Http.emptyBody
     , expect = Http.expectJson decodeMsg
     , timeout = Nothing
@@ -464,9 +472,9 @@ privateApiRequest token =
         |> Http.request
 
 
-getPrivateApi : String -> Cmd Msg
-getPrivateApi token =
-    Http.send PrivateApiMessage (privateApiRequest token)
+getPrivateApi : Endpoints -> String -> Cmd Msg
+getPrivateApi endpoints token =
+    Http.send PrivateApiMessage (privateApiRequest endpoints token)
 
 
 decodeMsg : Decoder ApiResponse

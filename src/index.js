@@ -10,6 +10,17 @@ var elmApp = Elm.Main.embed(elmEntry, {
     staticAssetsPath: require('../config/paths').staticAssets
 });
 
+// Gitignored config information
+
+
+
+elmApp.ports.getEndpoints.subscribe(function () {
+    var endpoints = require('../config/endpoints')
+
+    console.log(endpoints);
+    elmApp.ports.receiveEndpoints.send(endpoints);
+});
+
 // State storage ports
 
 var localStorageLoggedInUser = 'loggedInUser'
