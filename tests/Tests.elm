@@ -5,22 +5,18 @@ import Expect
 import App
 import Test.Html.Query as Query
 import Test.Html.Selector exposing (text, tag)
+import Time exposing (millisecond)
 
 
 all : Test
 all =
     describe "Test Suite"
-        [ describe "type alias"
-            [ test "Flags contain static assets path" <|
-                \() ->
-                    Expect.equal "/path/" (App.Flags "/path/").staticAssetsPath
-            ]
-        , describe "Initial setup"
+        [ describe "Initial setup"
             [
             test "App.model.page should be set to home" <|
                 \()->
                     let 
-                        flags = App.Flags "/path/"
+                        flags = App.Flags "/path/" (1491214218028 * millisecond)
 
                         location = { href = ""
                             , host = ""
@@ -35,7 +31,7 @@ all =
                             , password = "" 
                             }
 
-                        model = Tuple.first (App.init flags  location)
+                        model = Tuple.first (App.init flags location)
                     in
                     Expect.equal model.page App.Home
               ]
@@ -50,7 +46,7 @@ all =
         -- , describe "home page"
         --     [ test "Home page contains Home title" <|
         --         \() -> 
-        --             App.pageHome { flags = (App.Flags "/path/" )}
+        --             App.pageHome _
         --             |> Query.fromHtml
         --             |> Query.find [ tag "h3" ]
         --             |> Query.has [ text "Home" ]

@@ -4,6 +4,8 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Bootstrap.Grid as Grid
 import Bootstrap.Navbar as Navbar
+import Bootstrap.Alert as Alert
+import Bootstrap.Button as Button
 import UrlParser exposing ((</>))
 import Navigation exposing (Location)
 import Bootstrap.Dropdown as Dropdown
@@ -45,8 +47,9 @@ type Role
 
 
 type alias Flags =
-    { staticAssetsPath : String,
-      startTime: Time }
+    { staticAssetsPath : String
+    , startTime : Time
+    }
 
 
 type Page
@@ -68,8 +71,8 @@ init flags location =
     let
         initModel =
             { flags =
-                { staticAssetsPath = flags.staticAssetsPath,
-                startTime = flags.startTime
+                { staticAssetsPath = flags.staticAssetsPath
+                , startTime = flags.startTime
                 }
             , authenticationRequired = True
             , role = User
@@ -117,6 +120,7 @@ type Msg
     | PrivateApiMessage (Result Http.Error ApiResponse)
     | ReceiveTime Time
     | ReceiveEndpoints Endpoints
+    | CloseGLobalAlert
 
 
 
@@ -229,6 +233,9 @@ update msg model =
         ReceiveEndpoints endpoints ->
             ( { model | endpoints = endpoints }, Cmd.none )
 
+        CloseGLobalAlert ->
+            ( {model | globalAlert = Nothing } , Cmd.none )
+
 
 alertExpired : Model -> Bool
 alertExpired model =
@@ -251,17 +258,12 @@ tokenExpired model =
                 _ ->
                     Ok False
     in
-        case expiryResult of
-            Ok result ->
-                result
-
-            Err _ ->
-                True
+        Result.withDefault True expiryResult
 
 
 setGlobalAlert : Model -> String -> Time -> Maybe Alert
 setGlobalAlert model message duration =
-            Just { message = message, start = model.theTime, duration = duration }
+    Just { message = message, start = model.theTime, duration = duration }
 
 
 urlUpdate : Location -> Model -> ( Model, Cmd Msg )
@@ -353,18 +355,12 @@ menu model =
 content : Model -> Html Msg
 content model =
     div []
-        [ div
-            [ class "alert alert-success my-2"
-            , hidden (model.globalAlert == Nothing)
-            ]
-            [ text
-                (case model.globalAlert of
-                    Nothing ->
-                        ""
-
-                    Just alert ->
-                        alert.message
-                )
+        [ div [ class "mt-2", hidden (model.globalAlert == Nothing) ]
+            [ Alert.info
+                [  button [class "close", onClick CloseGLobalAlert ]
+                  [span [] [text "x" ]]
+                    
+                    , text (Maybe.withDefault "" (Maybe.map .message model.globalAlert)) ]
             ]
         , case model.page of
             Home ->
@@ -386,21 +382,29 @@ login model =
 pageHome : Model -> Html Msg
 pageHome model =
     div []
-        [ h3 [] [ text "Home" ]
+        [ h3 [class "mt-2"] [ text "Home" ]
         , div []
-            [ button [ onClick CallPublicApi ] [ text "PublicApi" ]
-            , button [ onClick CallPrivateApi ] [ text "PrivateApi" ]
+            [ Button.button
+                [ Button.primary
+                , Button.attrs [ class "mr-2", onClick CallPublicApi ]
+                ]
+                [ text "Public Api" ]
+            , Button.button
+                [ Button.primary
+                , Button.attrs [ onClick CallPrivateApi ] 
+                ]
+                [ text "Private Api" ]
             ]
         , text ("Time: " ++ toString model.theTime)
-        , div []
-            [ img [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg") ] [] ]
+        , div [ class "wrapper", width 400 ]
+            [ img [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg"), width 300 ] [] ]
         ]
 
 
 pageAbout : Html Msg
 pageAbout =
     div []
-        [ h3 [] [ text "About" ]
+        [ h3 [class "mt-2"] [ text "About" ]
         ]
 
 
