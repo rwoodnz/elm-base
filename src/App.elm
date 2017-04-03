@@ -29,7 +29,7 @@ type alias Model =
     , authenticationModel : Auth.AuthenticationModel
     , globalAlert : Maybe Alert
     , existingLoginHasBeenChecked : Bool
-    , theTime : Maybe Time
+    , theTime : Time
     , endpoints : Endpoints
     }
 
@@ -45,7 +45,8 @@ type Role
 
 
 type alias Flags =
-    { staticAssetsPath : String }
+    { staticAssetsPath : String,
+      startTime: Time }
 
 
 type Page
@@ -67,7 +68,8 @@ init flags location =
     let
         initModel =
             { flags =
-                { staticAssetsPath = flags.staticAssetsPath
+                { staticAssetsPath = flags.staticAssetsPath,
+                startTime = flags.startTime
                 }
             , authenticationRequired = True
             , role = User
@@ -77,7 +79,7 @@ init flags location =
             , dropdownState = Dropdown.initialState
             , globalAlert = Nothing
             , existingLoginHasBeenChecked = False
-            , theTime = Nothing
+            , theTime = flags.startTime
             , endpoints = { publicExample = "", privateExample = "" }
             }
 
@@ -126,7 +128,7 @@ update msg model =
     case msg of
         ReceiveTime time ->
             ( { model
-                | theTime = Just time
+                | theTime = time
                 , globalAlert =
                     if alertExpired model then
                         Nothing
@@ -230,11 +232,11 @@ update msg model =
 
 alertExpired : Model -> Bool
 alertExpired model =
-    case ( model.globalAlert, model.theTime ) of
-        ( Just alert, Just time ) ->
-            (time - (alert.start + alert.duration) > 0)
+    case model.globalAlert of
+        Just alert ->
+            model.theTime - (alert.start + alert.duration) > 0
 
-        ( _, _ ) ->
+        Nothing ->
             False
 
 
@@ -242,9 +244,9 @@ tokenExpired : Model -> Bool
 tokenExpired model =
     let
         expiryResult =
-            case ( model.theTime, model.authenticationModel ) of
-                ( Just time, Auth.LoggedIn user ) ->
-                    isExpired time user.token
+            case model.authenticationModel of
+                Auth.LoggedIn user ->
+                    isExpired model.theTime user.token
 
                 _ ->
                     Ok False
@@ -259,12 +261,7 @@ tokenExpired model =
 
 setGlobalAlert : Model -> String -> Time -> Maybe Alert
 setGlobalAlert model message duration =
-    case model.theTime of
-        Nothing ->
-            Nothing
-
-        Just time ->
-            Just { message = message, start = time, duration = duration }
+            Just { message = message, start = model.theTime, duration = duration }
 
 
 urlUpdate : Location -> Model -> ( Model, Cmd Msg )
@@ -394,7 +391,7 @@ pageHome model =
             [ button [ onClick CallPublicApi ] [ text "PublicApi" ]
             , button [ onClick CallPrivateApi ] [ text "PrivateApi" ]
             ]
-        , text ("Time: " ++ Maybe.withDefault "" (Maybe.map toString model.theTime))
+        , text ("Time: " ++ toString model.theTime)
         , div []
             [ img [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg") ] [] ]
         ]

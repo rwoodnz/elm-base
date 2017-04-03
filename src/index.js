@@ -7,12 +7,11 @@ var elmEntry = document.getElementById('elm-entry');
 // Embed Elm app and pass in static data
 
 var elmApp = Elm.Main.embed(elmEntry, {
-    staticAssetsPath: require('../config/paths').staticAssets
+    staticAssetsPath: require('../config/paths').staticAssets,
+    startTime: Date.now()
 });
 
 // Gitignored config information
-
-
 
 elmApp.ports.getEndpoints.subscribe(function () {
     var endpoints = require('../config/endpoints')
