@@ -12,10 +12,11 @@ import Bootstrap.Dropdown as Dropdown
 import Html.Events exposing (onClick)
 import Auth
 import Http
-import Json.Decode exposing (string, field, decodeString, Decoder)
+import Json.Decode exposing (string, field, decodeString, Decoder, float)
 import Json.Decode.Pipeline exposing (decode, required)
 import Time exposing (Time, every, second, minute)
-import Jwt exposing (isExpired)
+import Task
+import Process
 
 
 -- MODELS
@@ -55,7 +56,10 @@ type Page
 
 
 type alias Alert =
-    { message : String, start : Time, duration : Time }
+    { message : String
+    , start : Time
+    , duration : Time
+    }
 
 
 emptyAlert : Alert
@@ -103,6 +107,7 @@ init flags location =
             , urlCmd
             , navBarCmd
             , getEndpoints ()
+            , setTokenCheck model
             ]
         )
 
@@ -126,6 +131,7 @@ type Msg
     | ReceiveTime Time
     | ReceiveEndpoints Endpoints
     | CloseGLobalAlert
+    | TokenCheck
 
 
 
@@ -155,9 +161,7 @@ update msg model =
                         emptyAlert
                         model.globalAlert
               }
-            , iff (model.authenticationRequired && (tokenExpired model))
-                Auth.showLock
-                Cmd.none
+            , Cmd.none
             )
 
         ReceiveMaybeLoggedInUser maybeLoggedInUser ->
@@ -167,7 +171,7 @@ update msg model =
                         | authenticationModel = Auth.LoggedIn user
                         , existingLoginHasBeenChecked = True
                       }
-                    , Cmd.none
+                    , setTokenCheck model
                     )
 
                 Nothing ->
@@ -191,7 +195,10 @@ update msg model =
 
         LogOut ->
             ( { model | authenticationModel = Auth.NotLoggedIn }
-            , removeLoggedInUser ()
+            , Cmd.batch
+                [ removeLoggedInUser ()
+                , Auth.showLock
+                ]
             )
 
         LogIn ->
@@ -250,24 +257,40 @@ update msg model =
         CloseGLobalAlert ->
             ( { model | globalAlert = emptyAlert }, Cmd.none )
 
+        TokenCheck ->
+            if
+                model.authenticationRequired
+                    && Auth.tokenExpiryTime model.authenticationModel
+                    <= model.theTime
+            then
+                ( model, Auth.showLock )
+            else
+                ( model, Cmd.none )
+
 
 alertExpired : Alert -> Time -> Bool
 alertExpired alert time =
     time - (alert.start + alert.duration) > 0
 
 
-tokenExpired : Model -> Bool
-tokenExpired model =
-    let
-        expiryResult =
-            case model.authenticationModel of
-                Auth.LoggedIn user ->
-                    isExpired model.theTime user.token
+setTokenCheck : Model -> Cmd Msg
+setTokenCheck model =
+    setTimeCheck model.theTime
+        (Auth.tokenExpiryTime model.authenticationModel)
+        TokenCheck
 
-                _ ->
-                    Ok False
+
+setTimeCheck : Time -> Time -> Msg -> Cmd Msg
+setTimeCheck theTime expiryTime msg =
+    let
+        duration =
+            Basics.max 0 (expiryTime - theTime)
     in
-        Result.withDefault True expiryResult
+        Time.now
+            |> Task.andThen (\now -> Process.sleep duration)
+            |> Task.attempt (\_ -> msg)
+
+
 
 
 urlUpdate : Location -> Model -> ( Model, Cmd Msg )
@@ -399,7 +422,8 @@ pageHome model =
                 ]
                 [ text "Private Api" ]
             ]
-        , text ("Time: " ++ toString model.theTime)
+        , div [] [ text ("Time: " ++ toString model.theTime) ]
+        , div [] [ text ("TokenExpiryTime: " ++ toString (Auth.tokenExpiryTime model.authenticationModel)) ]
         , div [ class "wrapper", width 400 ]
             [ img [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg"), width 300, class "rounded" ] [] ]
         ]

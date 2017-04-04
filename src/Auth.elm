@@ -1,6 +1,4 @@
 -- Uses Auth0
-
-
 port module Auth
     exposing
         ( AuthenticationModel(..)
@@ -10,7 +8,12 @@ port module Auth
         , getAuthResult
         , isLoggedIn
         , handleReceiveAuthentication
+        , tokenExpiryTime
         )
+
+import Jwt exposing (decodeToken)
+import Json.Decode exposing (field, float) 
+import Time
 
 -- MODELS
 
@@ -38,8 +41,6 @@ type alias UserProfile =
 
 type alias Token =
     String
-
-
 
 -- Authentication process
 
@@ -89,6 +90,23 @@ isLoggedIn authenticationModel =
         NotLoggedIn ->
             False
 
+
+tokenExpiryTime : AuthenticationModel -> Time.Time
+tokenExpiryTime authenticationModel =
+    let
+        value =
+            case authenticationModel of
+                LoggedIn user ->
+                    tokenExpiry user.token
+
+                _ ->
+                    Ok 0
+    in
+        Result.withDefault 0 value * 1000
+
+tokenExpiry: String -> Result Jwt.JwtError Float
+tokenExpiry token = 
+    Jwt.decodeToken (field "exp" float) token
 
 
 -- AUTHENTICATION PORTS

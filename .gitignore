@@ -18,3 +18,6 @@ node_modules
 
 # Endpoints
 config/endpoints.js
+
+# Auth
+config/authId.js

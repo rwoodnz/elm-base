@@ -15,8 +15,6 @@ var elmApp = Elm.Main.embed(elmEntry, {
 
 elmApp.ports.getEndpoints.subscribe(function () {
     var endpoints = require('../config/endpoints')
-
-    console.log(endpoints);
     elmApp.ports.receiveEndpoints.send(endpoints);
 });
 
@@ -61,7 +59,9 @@ var options = {
 };
 
 // Set up Auth0 authentication
-var lock = new Auth0Lock('SVTFujME3uKXUexoolrRTRqjYL5xl6nM', 'rwoodnz.auth0.com', options);
+var auth = require('../config/auth');
+
+var lock = new Auth0Lock(auth.authId, 'rwoodnz.auth0.com', options);
 
 // Show Auth0 lock subscription
 elmApp.ports.auth0showLock.subscribe(function (options) {
