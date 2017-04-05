@@ -1,7 +1,6 @@
 module Auth.Common exposing (..)
 
 
-
 type AuthenticationModel
     = NotLoggedIn
     | LoggedIn LoggedInUser
@@ -26,15 +25,16 @@ type alias UserProfile =
 type alias Token =
     String
 
+
+type alias AuthenticationResult =
+    { err : Maybe AuthenticationError
+    , ok : Maybe LoggedInUser
+    }
+
+
 type alias AuthenticationError =
     { name : Maybe String
     , code : Maybe String
     , description : String
     , statusCode : Maybe Int
-    }
-
-
-type alias AuthenticationResult =
-    { err : Maybe AuthenticationError
-    , ok : Maybe LoggedInUser
     }

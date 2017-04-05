@@ -21,26 +21,6 @@ import Process
 -- The latter requires closable has to be set to true in Auth0 options in index.js so that autoclose also works.
 
 
-type alias Model =
-    { page : Page
-    , navbarState : Navbar.State
-    , flags : Flags
-    , dropdownState : Dropdown.State
-    , authenticationRequired : Bool
-    , authenticationModel : Auth.Common.AuthenticationModel
-    , globalAlert : Alert
-    , existingLoginHasBeenChecked : Bool
-    , theTime : Time
-    , endpoints : Endpoints
-    }
-
-
-type alias Flags =
-    { staticAssetsPath : String
-    , startTime : Time
-    }
-
-
 init : Flags -> Location -> ( Model, Cmd Msg )
 init flags location =
     let
@@ -273,3 +253,11 @@ subscriptions model =
         , receiveEndpoints ReceiveEndpoints
         ]
 
+
+
+-- CONSTANTS
+
+
+emptyAlert : Alert
+emptyAlert =
+    Alert "" 0 0
