@@ -1,4 +1,4 @@
-require('./main.css');
+require('./static/main.css');
 
 var Elm = require('./Main.elm');
 

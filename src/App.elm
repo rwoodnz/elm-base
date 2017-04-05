@@ -1,25 +1,24 @@
 port module App exposing (..)
 
-import Html exposing (..)
-import Html.Attributes exposing (..)
-import Bootstrap.Grid as Grid
+import Common exposing (..)
+import External exposing (..)
+import Auth.App
+import Auth.External
+import Auth.Common
 import Bootstrap.Navbar as Navbar
-import Bootstrap.Alert as Alert
-import Bootstrap.Button as Button
 import UrlParser exposing ((</>))
 import Navigation exposing (Location)
 import Bootstrap.Dropdown as Dropdown
-import Html.Events exposing (onClick)
-import Auth
-import Http
-import Json.Decode exposing (string, field, decodeString, Decoder, float)
-import Json.Decode.Pipeline exposing (decode, required)
 import Time exposing (Time, every, second, minute)
 import Task
 import Process
 
 
--- MODELS
+-- INITIALISATION
+-- There are two modes of authenticaiton:
+-- Log in mannually or
+-- AuthenticationRequired
+-- The latter requires closable has to be set to true in Auth0 options in index.js so that autoclose also works.
 
 
 type alias Model =
@@ -28,8 +27,7 @@ type alias Model =
     , flags : Flags
     , dropdownState : Dropdown.State
     , authenticationRequired : Bool
-    , role : Role
-    , authenticationModel : Auth.AuthenticationModel
+    , authenticationModel : Auth.Common.AuthenticationModel
     , globalAlert : Alert
     , existingLoginHasBeenChecked : Bool
     , theTime : Time
@@ -37,42 +35,10 @@ type alias Model =
     }
 
 
-type Role
-    = Admin
-    | CustomerService
-    | User
-
-
 type alias Flags =
     { staticAssetsPath : String
     , startTime : Time
     }
-
-
-type Page
-    = Home
-    | About
-    | NotFound
-
-
-type alias Alert =
-    { message : String
-    , start : Time
-    , duration : Time
-    }
-
-
-emptyAlert : Alert
-emptyAlert =
-    Alert "" 0 0
-
-
-
--- INITIALISATION
--- There are two modes of authenticaiton:
--- Log in mannually or
--- AuthenticationRequired
--- The latter requires closable has to be set to true in Auth0 options in index.js so that autoclose also works.
 
 
 init : Flags -> Location -> ( Model, Cmd Msg )
@@ -84,8 +50,7 @@ init flags location =
                 , startTime = flags.startTime
                 }
             , authenticationRequired = True
-            , role = User
-            , authenticationModel = Auth.NotLoggedIn
+            , authenticationModel = Auth.Common.NotLoggedIn
             , navbarState = navbarState
             , page = Home
             , dropdownState = Dropdown.initialState
@@ -103,47 +68,13 @@ init flags location =
     in
         ( model
         , Cmd.batch
-            [ getLoggedInUser ()
+            [ Auth.External.getLoggedInUser ()
             , urlCmd
             , navBarCmd
             , getEndpoints ()
             , setTokenCheck model
             ]
         )
-
-
-
--- MESSAGES
-
-
-type Msg
-    = UrlChange Location
-    | NavbarMsg Navbar.State
-    | DropdownMsg Dropdown.State
-    | LogOut
-    | LogIn
-    | ReceiveMaybeLoggedInUser (Maybe Auth.LoggedInUser)
-    | ReceiveAuthentication Auth.AuthenticationResult
-    | CallPrivateApi
-    | CallPublicApi
-    | PublicApiMessage (Result Http.Error ApiResponse)
-    | PrivateApiMessage (Result Http.Error ApiResponse)
-    | ReceiveTime Time
-    | ReceiveEndpoints Endpoints
-    | CloseGLobalAlert
-    | TokenCheck
-
-
-
--- GENERAL HELPERS
-
-
-iff : Bool -> a -> a -> a
-iff condition a b =
-    if condition then
-        a
-    else
-        b
 
 
 
@@ -157,8 +88,9 @@ update msg model =
             ( { model
                 | theTime = time
                 , globalAlert =
-                    iff (alertExpired model.globalAlert model.theTime)
+                    if alertExpired model.globalAlert model.theTime then
                         emptyAlert
+                    else
                         model.globalAlert
               }
             , Cmd.none
@@ -168,7 +100,7 @@ update msg model =
             case maybeLoggedInUser of
                 Just user ->
                     ( { model
-                        | authenticationModel = Auth.LoggedIn user
+                        | authenticationModel = Auth.Common.LoggedIn user
                         , existingLoginHasBeenChecked = True
                       }
                     , setTokenCheck model
@@ -176,11 +108,12 @@ update msg model =
 
                 Nothing ->
                     ( { model
-                        | authenticationModel = Auth.NotLoggedIn
+                        | authenticationModel = Auth.Common.NotLoggedIn
                         , existingLoginHasBeenChecked = True
                       }
-                    , iff model.authenticationRequired
-                        Auth.showLock
+                    , if model.authenticationRequired then
+                        Auth.External.showLock
+                      else
                         Cmd.none
                     )
 
@@ -194,40 +127,43 @@ update msg model =
             ( { model | dropdownState = state }, Cmd.none )
 
         LogOut ->
-            ( { model | authenticationModel = Auth.NotLoggedIn }
+            ( { model | authenticationModel = Auth.Common.NotLoggedIn }
             , Cmd.batch
-                [ removeLoggedInUser ()
-                , Auth.showLock
+                [ Auth.External.removeLoggedInUser ()
+                , Auth.External.showLock
                 ]
             )
 
         LogIn ->
-            ( model, Auth.showLock )
+            ( model, Auth.External.showLock )
 
         ReceiveAuthentication result ->
             let
                 ( newAuthenticationModel, error ) =
-                    Auth.handleReceiveAuthentication result
+                    Auth.App.handleReceiveAuthentication result
             in
                 ( { model
                     | authenticationModel = newAuthenticationModel
                   }
                 , case newAuthenticationModel of
-                    Auth.LoggedIn user ->
-                        storeLoggedInUser user
+                    Auth.Common.LoggedIn user ->
+                        Cmd.batch
+                            [ Auth.External.storeLoggedInUser user
+                            , setTokenCheck model
+                            ]
 
-                    Auth.NotLoggedIn ->
+                    Auth.Common.NotLoggedIn ->
                         Cmd.none
                 )
 
         CallPrivateApi ->
             case model.authenticationModel of
-                Auth.NotLoggedIn ->
+                Auth.Common.NotLoggedIn ->
                     ( { model | globalAlert = Alert "Not logged in" model.theTime (5 * minute) }
                     , Cmd.none
                     )
 
-                Auth.LoggedIn user ->
+                Auth.Common.LoggedIn user ->
                     ( model, (getPrivateApi model.endpoints user.token) )
 
         CallPublicApi ->
@@ -260,12 +196,16 @@ update msg model =
         TokenCheck ->
             if
                 model.authenticationRequired
-                    && Auth.tokenExpiryTime model.authenticationModel
-                    <= model.theTime
+                    && Auth.App.tokenExpiryTime model.authenticationModel
+                    <= (model.theTime)
             then
-                ( model, Auth.showLock )
+                ( model, Auth.External.showLock )
             else
-                ( model, Cmd.none )
+                ( model, setTokenCheck model )
+
+
+
+-- TIME CONTROL
 
 
 alertExpired : Alert -> Time -> Bool
@@ -276,7 +216,7 @@ alertExpired alert time =
 setTokenCheck : Model -> Cmd Msg
 setTokenCheck model =
     setTimeCheck model.theTime
-        (Auth.tokenExpiryTime model.authenticationModel)
+        (Auth.App.tokenExpiryTime model.authenticationModel)
         TokenCheck
 
 
@@ -291,6 +231,8 @@ setTimeCheck theTime expiryTime msg =
             |> Task.attempt (\_ -> msg)
 
 
+
+-- ROUTING
 
 
 urlUpdate : Location -> Model -> ( Model, Cmd Msg )
@@ -325,188 +267,9 @@ subscriptions model =
     Sub.batch
         [ Navbar.subscriptions model.navbarState NavbarMsg
         , Dropdown.subscriptions model.dropdownState DropdownMsg
-        , receiveMaybeLoggedInUser ReceiveMaybeLoggedInUser
-        , Auth.getAuthResult ReceiveAuthentication
+        , Auth.External.receiveMaybeLoggedInUser ReceiveMaybeLoggedInUser
+        , Auth.External.getAuthResult ReceiveAuthentication
         , every (5 * second) ReceiveTime
         , receiveEndpoints ReceiveEndpoints
         ]
 
-
-
--- VIEW
-
-
-view : Model -> Html Msg
-view model =
-    Grid.container []
-        [ menu model
-        , if
-            model.authenticationRequired
-                && not (Auth.isLoggedIn model.authenticationModel)
-          then
-            login model
-          else
-            content model
-        ]
-
-
-menu : Model -> Html Msg
-menu model =
-    div []
-        [ Navbar.config NavbarMsg
-            |> Navbar.withAnimation
-            |> Navbar.collapseSmall
-            |> Navbar.container
-            |> Navbar.brand [ href "#" ]
-                [ img
-                    [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg")
-                    , class "d-inline-block align-top"
-                    , width 30
-                    , style
-                        [ ( "padding", "5px" )
-                        , ( "margin-right", "5px" )
-                        ]
-                    ]
-                    []
-                , text "Elm-base"
-                ]
-            |> Navbar.items
-                [ Navbar.itemLink [ href "#about" ] [ text "About" ]
-                , Navbar.itemLink [ hidden (not (Auth.isLoggedIn model.authenticationModel)), onClick LogOut ] [ text "Log out" ]
-                , Navbar.itemLink [ hidden (Auth.isLoggedIn model.authenticationModel), onClick LogIn ] [ text "Log in or sign up" ]
-                ]
-            |> Navbar.view model.navbarState
-        ]
-
-
-content : Model -> Html Msg
-content model =
-    div []
-        [ div [ class "mt-2", hidden (model.globalAlert == emptyAlert) ]
-            [ Alert.info
-                [ Button.button [ Button.attrs [ class "close", onClick CloseGLobalAlert ] ]
-                    [ span [] [ text "x" ] ]
-                , text model.globalAlert.message
-                ]
-            ]
-        , case model.page of
-            Home ->
-                pageHome model
-
-            About ->
-                pageAbout
-
-            NotFound ->
-                pageNotFound
-        ]
-
-
-login : Model -> Html Msg
-login model =
-    div [] []
-
-
-pageHome : Model -> Html Msg
-pageHome model =
-    div []
-        [ h3 [ class "mt-2" ] [ text "Home" ]
-        , div []
-            [ Button.button
-                [ Button.primary
-                , Button.attrs [ class "mr-2", onClick CallPublicApi ]
-                ]
-                [ text "Public Api" ]
-            , Button.button
-                [ Button.primary
-                , Button.attrs [ onClick CallPrivateApi ]
-                ]
-                [ text "Private Api" ]
-            ]
-        , div [] [ text ("Time: " ++ toString model.theTime) ]
-        , div [] [ text ("TokenExpiryTime: " ++ toString (Auth.tokenExpiryTime model.authenticationModel)) ]
-        , div [ class "wrapper", width 400 ]
-            [ img [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg"), width 300, class "rounded" ] [] ]
-        ]
-
-
-pageAbout : Html Msg
-pageAbout =
-    div []
-        [ h3 [ class "mt-2" ] [ text "About" ]
-        ]
-
-
-pageNotFound : Html Msg
-pageNotFound =
-    div []
-        [ h3 [] [ text "Not found" ]
-        , text "Please check your URL"
-        ]
-
-
-
--- LOCAL BROWSER STORAGE PORTS
-
-
-port storeLoggedInUser : Auth.LoggedInUser -> Cmd msg
-
-
-port removeLoggedInUser : () -> Cmd msg
-
-
-port getLoggedInUser : () -> Cmd msg
-
-
-port receiveMaybeLoggedInUser : (Maybe Auth.LoggedInUser -> msg) -> Sub msg
-
-
-
--- HTTP
-
-
-type alias Endpoints =
-    { publicExample : String, privateExample : String }
-
-
-port getEndpoints : () -> Cmd msg
-
-
-port receiveEndpoints : (Endpoints -> msg) -> Sub msg
-
-
-type alias ApiResponse =
-    { message : String }
-
-
-getPublicApi : Endpoints -> Cmd Msg
-getPublicApi endpoints =
-    let
-        apiMessageRequest =
-            Http.get endpoints.publicExample decodeMsg
-    in
-        Http.send PublicApiMessage apiMessageRequest
-
-
-privateApiRequest : Endpoints -> String -> Http.Request ApiResponse
-privateApiRequest endpoints token =
-    { method = "GET"
-    , headers =
-        [ Http.header "Authorization" ("Bearer " ++ token) ]
-    , url = endpoints.privateExample
-    , body = Http.emptyBody
-    , expect = Http.expectJson decodeMsg
-    , timeout = Nothing
-    , withCredentials = False
-    }
-        |> Http.request
-
-
-getPrivateApi : Endpoints -> String -> Cmd Msg
-getPrivateApi endpoints token =
-    Http.send PrivateApiMessage (privateApiRequest endpoints token)
-
-
-decodeMsg : Decoder ApiResponse
-decodeMsg =
-    Json.Decode.Pipeline.decode ApiResponse
-        |> Json.Decode.Pipeline.optional "message" string "No message"

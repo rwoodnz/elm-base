@@ -1,13 +1,15 @@
 module Main exposing (..)
 
+import Common exposing (..)
+import App exposing (..)
 import Navigation exposing (Location)
-import App exposing (view, init, update, subscriptions)
+import View exposing (..)
 
 
-main : Program App.Flags App.Model App.Msg
+main : Program Flags Model Msg
 main =
-    Navigation.programWithFlags App.UrlChange
-        { view = App.view
+    Navigation.programWithFlags UrlChange
+        { view = View.view
         , init = App.init
         , update = App.update
         , subscriptions = App.subscriptions
