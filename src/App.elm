@@ -199,7 +199,6 @@ setTokenCheck model =
         (Auth.App.tokenExpiryTime model.authenticationModel)
         TokenCheck
 
-
 setTimeCheck : Time -> Time -> Msg -> Cmd Msg
 setTimeCheck theTime expiryTime msg =
     let

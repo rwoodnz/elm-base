@@ -11,6 +11,9 @@ import Bootstrap.Navbar as Navbar
 import Bootstrap.Alert as Alert
 import Bootstrap.Button as Button
 import Html.Events exposing (onClick)
+import Date
+import Date.Extra.Format exposing (..)
+import Date.Extra.Config.Config_en_au exposing (..)
 
 
 view : Model -> Html Msg
@@ -99,8 +102,8 @@ pageHome model =
                 ]
                 [ text "Private Api" ]
             ]
-        , div [] [ text ("Time: " ++ toString model.theTime) ]
-        , div [] [ text ("TokenExpiryTime: " ++ toString (Auth.tokenExpiryTime model.authenticationModel)) ]
+        , div [] [ text ("Time: " ++ utcIsoString (Date.fromTime model.theTime)) ]
+        , div [] [ text ("TokenExpiryTime: " ++ utcIsoString (Date.fromTime (Auth.tokenExpiryTime model.authenticationModel))) ]
         , div [ class "wrapper", width 400 ]
             [ img [ src (model.flags.staticAssetsPath ++ "/Richard.jpeg"), width 300, class "rounded" ] [] ]
         ]
