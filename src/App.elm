@@ -34,7 +34,7 @@ init flags location =
             , navbarState = navbarState
             , page = Home
             , dropdownState = Dropdown.initialState
-            , globalAlert = emptyAlert
+            , globalAlerts = []
             , existingLoginHasBeenChecked = False
             , theTime = flags.startTime
             , endpoints = { publicExample = "", privateExample = "" }
@@ -65,16 +65,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         ReceiveTime time ->
-            ( { model
-                | theTime = time
-                , globalAlert =
-                    if alertExpired model.globalAlert model.theTime then
-                        emptyAlert
-                    else
-                        model.globalAlert
-              }
-            , Cmd.none
-            )
+            ( { model | theTime = time }, Cmd.none )
 
         ReceiveMaybeLoggedInUser maybeLoggedInUser ->
             case maybeLoggedInUser of
@@ -139,9 +130,7 @@ update msg model =
         CallPrivateApi ->
             case model.authenticationModel of
                 Auth.Common.NotLoggedIn ->
-                    ( { model | globalAlert = Alert "Not logged in" model.theTime (5 * minute) }
-                    , Cmd.none
-                    )
+                    setAlert model "Not logged in" (5 * minute)
 
                 Auth.Common.LoggedIn user ->
                     ( model, (getPrivateApi model.endpoints user.token) )
@@ -152,28 +141,23 @@ update msg model =
         PublicApiMessage response ->
             case response of
                 Ok apiMessage ->
-                    ( { model | globalAlert = Alert apiMessage.message model.theTime (1 * minute) }, Cmd.none )
+                    setAlert model apiMessage.message (1 * minute)
 
                 Err errorMessage ->
-                    ( { model | globalAlert = Alert "Data could not be retrieved from the public API" model.theTime (1 * minute) }, Cmd.none )
+                    setAlert model "Data could not be retrieved from the public API" (1 * minute)
 
         PrivateApiMessage result ->
             case result of
                 Ok apiMessage ->
-                    ( { model | globalAlert = Alert apiMessage.message model.theTime (1 * minute) }, Cmd.none )
+                    setAlert model apiMessage.message (1 * minute)
 
                 Err errorMessage ->
-                    ( { model | globalAlert = Alert "Data could not be retrieved from the private API" model.theTime (1 * minute) }
-                    , Cmd.none
-                    )
+                    setAlert model "Data could not be retrieved from the private API" (1 * minute)
 
         ReceiveEndpoints endpoints ->
             ( { model | endpoints = endpoints }, Cmd.none )
 
-        CloseGLobalAlert ->
-            ( { model | globalAlert = emptyAlert }, Cmd.none )
-
-        TokenCheck ->
+        CheckToken ->
             if
                 model.authenticationRequired
                     && Auth.App.tokenExpiryTime model.authenticationModel
@@ -183,33 +167,51 @@ update msg model =
             else
                 ( model, setTokenCheck model )
 
+        DismissAlert alert ->
+            ( { model
+                | globalAlerts =
+                    List.filter (\item -> item /= alert) model.globalAlerts
+              }
+            , Cmd.none
+            )
+
 
 
 -- TIME CONTROL
 
 
-alertExpired : Alert -> Time -> Bool
-alertExpired alert time =
-    time - (alert.start + alert.duration) > 0
+setAlert : Model -> String -> Time -> ( Model, Cmd Msg )
+setAlert model alertMsg duration =
+    let
+        alert =
+            { message = alertMsg, expiry = model.theTime + duration }
+    in
+        ( { model
+            | globalAlerts = alert :: model.globalAlerts
+          }
+        , Cmd.batch [setTimeCheck
+            duration
+            (DismissAlert alert)
+        , updateTime ]
+        )
 
+updateTime : Cmd Msg
+updateTime =  Task.perform ReceiveTime Time.now
 
 setTokenCheck : Model -> Cmd Msg
 setTokenCheck model =
-    setTimeCheck model.theTime
-        (Auth.App.tokenExpiryTime model.authenticationModel)
-        TokenCheck
-
-setTimeCheck : Time -> Time -> Msg -> Cmd Msg
-setTimeCheck theTime expiryTime msg =
     let
         duration =
-            Basics.max 0 (expiryTime - theTime)
+            Auth.App.tokenExpiryTime model.authenticationModel - model.theTime
     in
-        Time.now
-            |> Task.andThen (\now -> Process.sleep duration)
-            |> Task.attempt (\_ -> msg)
+        setTimeCheck
+            duration
+            CheckToken
 
 
+setTimeCheck : Time -> Msg -> Cmd Msg
+setTimeCheck duration msg =
+        Task.perform (\_ -> msg) (Process.sleep duration)
 
 -- ROUTING
 
@@ -251,12 +253,3 @@ subscriptions model =
         , every (5 * second) ReceiveTime
         , receiveEndpoints ReceiveEndpoints
         ]
-
-
-
--- CONSTANTS
-
-
-emptyAlert : Alert
-emptyAlert =
-    Alert "" 0 0

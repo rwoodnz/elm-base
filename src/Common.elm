@@ -15,12 +15,16 @@ type alias Model =
     , dropdownState : Dropdown.State
     , authenticationRequired : Bool
     , authenticationModel : Auth.Common.AuthenticationModel
-    , globalAlert : Alert
+    , globalAlerts : List Alert
     , existingLoginHasBeenChecked : Bool
     , theTime : Time
     , endpoints : Endpoints
     }
 
+type alias Alert = 
+    { message : String
+    , expiry : Time
+    }
 
 type alias Flags =
     { staticAssetsPath : String
@@ -42,8 +46,8 @@ type Msg
     | PrivateApiMessage (Result Http.Error ApiResponse)
     | ReceiveTime Time
     | ReceiveEndpoints Endpoints
-    | CloseGLobalAlert
-    | TokenCheck
+    | CheckToken
+    | DismissAlert Alert
 
 
 type Page
@@ -52,16 +56,12 @@ type Page
     | NotFound
 
 
-type alias Alert =
-    { message : String
-    , start : Time
-    , duration : Time
-    }
-
-
 type alias Endpoints =
     { publicExample : String, privateExample : String }
 
 
 type alias ApiResponse =
     { message : String }
+
+emptyAlert: Alert
+emptyAlert = { message = "" , expiry = 0 }

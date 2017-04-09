@@ -1,7 +1,6 @@
 module View exposing (..)
 
 import Common exposing (..)
-import App exposing (..)
 import Auth.App as Auth
 
 import Html exposing (..)
@@ -13,7 +12,6 @@ import Bootstrap.Button as Button
 import Html.Events exposing (onClick)
 import Date
 import Date.Extra.Format exposing (..)
-import Date.Extra.Config.Config_en_au exposing (..)
 
 
 view : Model -> Html Msg
@@ -62,13 +60,8 @@ menu model =
 content : Model -> Html Msg
 content model =
     div []
-        [ div [ class "mt-2", hidden (model.globalAlert == emptyAlert) ]
-            [ Alert.info
-                [ Button.button [ Button.attrs [ class "close", onClick CloseGLobalAlert ] ]
-                    [ span [] [ text "x" ] ]
-                , text model.globalAlert.message
-                ]
-            ]
+        [div [] (List.map alertView
+            model.globalAlerts)
         , case model.page of
             Home ->
                 pageHome model
@@ -79,6 +72,16 @@ content model =
             NotFound ->
                 pageNotFound
         ]
+
+alertView : Alert -> Html Msg
+alertView alert = 
+    div [ class "mt-2", hidden (alert.message == "") ]
+    [ Alert.info
+        [ Button.button [ Button.attrs [ class "close", onClick (DismissAlert alert) ] ]
+            [ span [] [ text "x" ] ]
+        , text alert.message
+        ]
+    ]
 
 
 login : Model -> Html Msg
@@ -122,12 +125,3 @@ pageNotFound =
         [ h3 [] [ text "Not found" ]
         , text "Please check your URL"
         ]
-
-
-
--- CONSTANTS
-
-
-emptyAlert : Alert
-emptyAlert =
-    Alert "" 0 0
