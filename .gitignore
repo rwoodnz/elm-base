@@ -16,8 +16,5 @@ node_modules
 # VS Code
 .vscode
 
-# Endpoints
-config/endpoints.js
-
 # Auth
 config/authId.js

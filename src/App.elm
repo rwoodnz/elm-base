@@ -179,6 +179,11 @@ update msg model =
 
 -- TIME CONTROL
 
+-- Time is only updated on a set cycle, so sometimes need to update it additionally
+updateTime : Cmd Msg
+updateTime =
+    Task.perform ReceiveTime Time.now
+
 
 setAlert : Model -> String -> Time -> ( Model, Cmd Msg )
 setAlert model alertMsg duration =
@@ -189,14 +194,14 @@ setAlert model alertMsg duration =
         ( { model
             | globalAlerts = alert :: model.globalAlerts
           }
-        , Cmd.batch [setTimeCheck
-            duration
-            (DismissAlert alert)
-        , updateTime ]
+        , Cmd.batch
+            [ setTimeCheck
+                duration
+                (DismissAlert alert)
+            , updateTime
+            ]
         )
 
-updateTime : Cmd Msg
-updateTime =  Task.perform ReceiveTime Time.now
 
 setTokenCheck : Model -> Cmd Msg
 setTokenCheck model =
@@ -211,7 +216,9 @@ setTokenCheck model =
 
 setTimeCheck : Time -> Msg -> Cmd Msg
 setTimeCheck duration msg =
-        Task.perform (\_ -> msg) (Process.sleep duration)
+    Task.perform (\_ -> msg) (Process.sleep duration)
+
+
 
 -- ROUTING
 
