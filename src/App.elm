@@ -27,7 +27,6 @@ init flags location =
         initModel =
             { flags =
                 { staticAssetsPath = flags.staticAssetsPath
-                , startTime = flags.startTime
                 }
             , authenticationRequired = True
             , authenticationModel = Auth.Common.NotLoggedIn
@@ -36,7 +35,7 @@ init flags location =
             , dropdownState = Dropdown.initialState
             , globalAlerts = []
             , existingLoginHasBeenChecked = False
-            , theTime = flags.startTime
+            , theTime = 0
             , endpoints = { publicExample = "", privateExample = "" }
             }
 
@@ -53,6 +52,7 @@ init flags location =
             , navBarCmd
             , getEndpoints ()
             , setTokenCheck model
+            , updateTime
             ]
         )
 

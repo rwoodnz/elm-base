@@ -28,7 +28,6 @@ type alias Alert =
 
 type alias Flags =
     { staticAssetsPath : String
-    , startTime : Time
     }
 
 
